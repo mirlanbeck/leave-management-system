@@ -20,8 +20,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "lint:check": "prisma generate && eslint \"{src,test}/**/*.ts\"",
     "typecheck": "prisma generate && tsc --noEmit",
-    "test:int": "prisma generate && cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --testTimeout=30000 --testRegex \"\\.int\\.spec\\.ts$\"",
-    "prisma:migrate": "prisma migrate dev"
+    "test:int": "prisma generate && prisma migrate deploy && cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --testTimeout=30000 --testRegex \"\\.int\\.spec\\.ts$\"",
+    "prisma:migrate": "prisma migrate dev",
+    "db:drift": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -8,10 +8,137 @@ datasource db {
   provider = "postgresql"
 }
 
-// Временная таблица S0-b: нужна только чтобы `migrate deploy` было что применять.
-// В коде не используется; S1 удаляет её миграцией DROP TABLE.
-model AppMeta {
-  id    Int    @id @default(autoincrement())
-  key   String @unique
-  value String
+// Модель S1 (ROADMAP S1, architecture.md). Ограничения, которые Prisma не выражает
+// (EXCLUDE, частичные UNIQUE, CHECK, триггеры), лежат в сыром SQL миграции s1_data_model.
+// Даты отпусков и выхода — календарные (@db.Date), моменты времени — Timestamptz в UTC (RULES §1).
+// Моменты, зависящие от демо-часов (createdAt заявки, occurredAt журнала, ...), без DEFAULT:
+// их задаёт приложение из Clock (RULES §9).
+
+enum VacationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  REPLACED // «Заменена переносом»
+}
+
+enum LedgerKind {
+  DEBIT // списание при окончательном согласовании
+  REFUND // возврат при отмене или отзыве
+}
+
+enum MailType {
+  NEW_REQUEST
+  DECISION
+  REMINDER
+}
+
+enum MailStatus {
+  PENDING
+  SENT
+  SKIPPED // напоминание, ставшее неактуальным к моменту отправки (RULES §8)
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  login         String   @unique
+  email         String   @unique
+  passwordHash  String
+  fullName      String
+  hireDate      DateTime @db.Date
+  managerId     Int? // у директора NULL; ровно один такой пользователь (RULES §7)
+  teamName      String? // «Фронт-отдел», «Бэк-отдел»; задаёт seed (RULES §7)
+  isHr          Boolean  @default(false)
+  accessGranted Boolean  @default(false) // «доступ получен», никогда не снимается (RULES §6)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  manager      User?  @relation("Org", fields: [managerId], references: [id], onDelete: Restrict)
+  subordinates User[] @relation("Org")
+
+  vacations        Vacation[]      @relation("VacationEmployee")
+  backstopperFor   Vacation[]      @relation("VacationBackstopper")
+  decidedVacations Vacation[]      @relation("VacationDecider")
+  cancelledByMe    Vacation[]      @relation("VacationCanceller")
+  mail             OutboxMessage[]
+
+  @@index([managerId])
+}
+
+model Vacation {
+  id              Int            @id @default(autoincrement())
+  employeeId      Int
+  backstopperId   Int
+  startDate       DateTime       @db.Date
+  endDate         DateTime       @db.Date
+  workDays        Int // рабочие дни (пн–пт), целое; в журнале дни хранятся в половинках
+  status          VacationStatus @default(PENDING)
+  comment         String?
+  replacesId      Int? // заявка-перенос ссылается на исходную (RULES §5)
+  createdAt       DateTime       @db.Timestamptz(3)
+  decidedById     Int?
+  decidedAt       DateTime?      @db.Timestamptz(3)
+  decisionComment String?
+  cancelledById   Int?
+  cancelledAt     DateTime?      @db.Timestamptz(3)
+  returnDate      DateTime?      @db.Date // дата выхода при отзыве (RULES §5)
+
+  employee    User  @relation("VacationEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  backstopper User  @relation("VacationBackstopper", fields: [backstopperId], references: [id], onDelete: Restrict)
+  decidedBy   User? @relation("VacationDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  cancelledBy User? @relation("VacationCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
+
+  replaces   Vacation?  @relation("Transfer", fields: [replacesId], references: [id], onDelete: Restrict)
+  replacedBy Vacation[] @relation("Transfer")
+
+  ledger LedgerEntry[]
+  mail   OutboxMessage[]
+
+  @@index([employeeId, status, startDate, endDate])
+  @@index([status, startDate])
+  @@index([replacesId])
+}
+
+// Журнал баланса: только списания и возвраты. Начисления и обрезки вычисляются (RULES §6).
+model LedgerEntry {
+  id         Int        @id @default(autoincrement())
+  kind       LedgerKind
+  vacationId Int // заявка, чьё действие породило запись (для возврата — отменённое звено цепочки)
+  refundOfId Int? // для REFUND — списание корня цепочки (RULES §6)
+  halfDays   Int // половинки дня; DEBIT > 0, REFUND >= 0
+  occurredAt DateTime   @db.Timestamptz(3) // момент по Clock
+
+  vacation Vacation      @relation(fields: [vacationId], references: [id], onDelete: Restrict)
+  refundOf LedgerEntry?  @relation("Refund", fields: [refundOfId], references: [id], onDelete: Restrict)
+  refunds  LedgerEntry[] @relation("Refund")
+
+  @@index([vacationId])
+  @@index([refundOfId])
+}
+
+model OutboxMessage {
+  id            Int        @id @default(autoincrement())
+  type          MailType
+  vacationId    Int
+  recipientId   Int
+  status        MailStatus @default(PENDING)
+  subject       String
+  body          String
+  attempts      Int        @default(0)
+  nextAttemptAt DateTime   @default(now()) @db.Timestamptz(3) // системные часы (RULES §9)
+  sentAt        DateTime?  @db.Timestamptz(3)
+  lastError     String?
+  createdAt     DateTime   @db.Timestamptz(3) // момент по Clock
+
+  vacation  Vacation @relation(fields: [vacationId], references: [id], onDelete: Restrict)
+  recipient User     @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+
+  @@unique([type, vacationId, recipientId]) // RULES §8: одно письмо на «тип + отпуск + получатель»
+  @@index([status, nextAttemptAt])
+}
+
+// Состояние демо-часов: одна строка (id = 1, CHECK в миграции), RULES §9.
+model ClockState {
+  id        Int      @id @default(1)
+  instant   DateTime @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @db.Timestamptz(3)
 }

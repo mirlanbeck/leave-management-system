@@ -92,6 +92,9 @@ jobs:
         run: npm run test:int
       - if: matrix.tz != 'default'
         run: npx cross-env TZ=America/New_York npm run test:int
+      # Сырой SQL миграции не должен расходиться со schema.prisma (БД уже мигрирована test:int)
+      - if: matrix.tz == 'default'
+        run: npm run db:drift -w apps/api
 
   # Падает на несуществующих §N и §N-k (RULES), плюс unit самого скрипта.
   trace-rules:
