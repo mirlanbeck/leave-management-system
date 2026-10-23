@@ -10,13 +10,39 @@ Full-stack employee leave management system with leave balance tracking, approva
 - **Вне Claude Code:** отдельные вопросы (разбор требований, расход лимитов, формулировки для документации) обсуждались в чате claude.ai. Код проекта этим чатом не писался.
 - **Лог работы:** `DECISIONS.md` (решения с датой и временем), история коммитов, экспорт сессий Claude Code в `docs/sessions/`.
 
+## Требования к окружению
+
+Указаны только значения, измеренные на машине разработки 2026-10-23. Минимальные версии Docker и Compose, другие ОС и объём RAM для сборки образов не проверялись.
+
+**Проверено на:** Windows 11 Pro 10.0.26200 (64-bit), Docker Desktop (движок на WSL2, `6.18.33.2-microsoft-standard-WSL2`), 31,5 ГБ RAM, виртуальная машина Docker видит 24 CPU и 15,4 ГиБ.
+
+| Что                             | Измеренное значение                                                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Docker Engine                   | 29.8.2 (`docker version`, client и server)                                                                       |
+| Docker Compose                  | v5.5.1 (`docker compose version`), Compose v2+ синтаксис                                                         |
+| Node.js (для тестов вне Docker) | 24.21.0, npm 11.6.2                                                                                              |
+| Образы проекта                  | api 872 МБ, web 280 МБ; postgres 625 МБ, mailpit 60 МБ (`docker images`)                                         |
+| Память в простое после старта   | api 91,6 МиБ, postgres 36,3 МиБ, web 20,8 МиБ, mailpit 8,9 МиБ, всего около 158 МиБ (`docker stats --no-stream`) |
+
+**Порты (только 127.0.0.1):** web 8080, api 3000, Postgres 5432, Mailpit 8025 (интерфейс) и 1025 (SMTP). Порты должны быть свободны.
+
+**Запуск:** `docker compose up` из корня репозитория (`cp .env.example .env` не нужен, демо-значения заданы в `docker-compose.yml`). Страница: http://localhost:8080, проверка API: http://localhost:3000/health, почта: http://localhost:8025. Данные Postgres лежат в именованном томе `pgdata`; полный сброс: `docker compose down -v`.
+
+**Проверка запуска:** `npm run smoke:compose` (поднимает стек, проверяет healthcheck, порты, /health, перезапуск api, повторный `up`, том Postgres).
+
+**Integration-тесты и миграции вне Docker:** `npm run test:int` и `prisma migrate dev` запускаются на хосте и требуют `DATABASE_URL` (по умолчанию её нет). Сначала поднимите Postgres: `docker compose up -d postgres`. Затем:
+
+    npx cross-env DATABASE_URL=postgresql://leave:leave@127.0.0.1:5432/leave npm run test:int
+
+`cross-env` нужен, чтобы команда одинаково работала в PowerShell, cmd и bash. Unit-тесты (`npm test`) БД не требуют.
+
 ## Состояние проекта
 
 Заготовка: обновляется при закрытии каждого этапа (коды этапов: см. CLAUDE.md). Подробный список ограничений ведётся в issue `Известные ограничения`.
 
 | Этап                                       | Статус   |
 | ------------------------------------------ | -------- |
-| S0 Скелет                                  | не начат |
+| S0 Скелет                                  | в работе |
 | S1 Архитектура и модель данных             | не начат |
 | S2 Доменная логика                         | не начат |
 | S3 Вход, роли, демо-часы                   | не начат |
@@ -30,11 +56,11 @@ Full-stack employee leave management system with leave balance tracking, approva
 
 ### Работает
 
-Пока ничего.
+S0 (в работе): `docker compose up` поднимает postgres, mailpit, api и web, у каждого healthcheck; `GET /health` проверяет БД; миграции и seed (пока пустой) при старте api; страница web открывается и показывает статус API; Clock и `scripts/trace-rules.mjs` (S0-a).
 
 ### Не работает
 
-Пока ничего не запускалось.
+S0 ещё не закрыт: нет CI, `e2e:reset`, Playwright и задачи `fresh-clone`. Бизнес-функций (вход, заявки, баланс) нет. Таблица `AppMeta` временная, её убирает S1.
 
 ### Не делали и почему
 

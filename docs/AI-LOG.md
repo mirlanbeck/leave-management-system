@@ -59,3 +59,5 @@
 
 2026-10-23 11:15 | [S0] Ключевой промпт: «S0: ознакомься с документами и начни работу над S0», затем утверждение плана из 4 PR (S0-a…d).
 Исправил Пользователь: Node 24 вместо 22, ESLint запрещает только new Date() без аргументов и Date.now(), убран дубль .gitattributes из S0-c, пустую integration-задачу CI закрыть DB-пингом в /health либо пометить пустой.
+
+2026-10-23 15:49 | [S0] Ключевой промпт: «S0-b: docker-compose (postgres, mailpit, api, web, healthcheck), Dockerfile api на Debian slim, entrypoint с prisma migrate deploy и seed, GET /health с SELECT 1, Vite + React, Prisma 7.10.1 с AppMeta; сначала план». Пользователь подтвердил план, зафиксировал DEMO_MODE=true, nginx с проксированием /api и 127.0.0.1 для всех портов, и потребовал проверку запуском (prisma CLI и seed в образе, закреплённые теги, btree_gist, том, restart/повторный up, healthcheck, измеренные значения в README). Исправлено по ходу: prisma.config.ts ломал структуру dist, для jest с Prisma 7 нужен флаг vm-modules.

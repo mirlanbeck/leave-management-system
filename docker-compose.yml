@@ -1,0 +1,82 @@
+name: leave-management
+
+services:
+  postgres:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-leave}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-leave}
+      POSTGRES_DB: ${POSTGRES_DB:-leave}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-leave}:${POSTGRES_PASSWORD:-leave}@postgres:5432/${POSTGRES_DB:-leave}
+      COMPANY_TZ: ${COMPANY_TZ:-Asia/Bishkek}
+      REMINDER_DAYS: ${REMINDER_DAYS:-3}
+      DEMO_MODE: ${DEMO_MODE:-true}
+      # ТОЛЬКО ДЛЯ ДЕМО
+      JWT_SECRET: ${JWT_SECRET:-demo-only-not-for-production}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      # fetch не бросает на не-200, поэтому код выхода задаём явно
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:

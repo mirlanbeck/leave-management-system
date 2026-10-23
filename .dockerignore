@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/coverage
+**/.env
+.git
+docs
+e2e
+apps/api/src/generated
+*.md
