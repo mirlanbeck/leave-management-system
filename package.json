@@ -2,21 +2,24 @@
   "name": "leave-management-system",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "e2e"
   ],
   "engines": {
     "node": ">=24"
   },
   "scripts": {
     "lint": "npm run lint:check -w apps/api",
-    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web",
+    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web && npm run typecheck -w e2e",
     "test": "npm test -w apps/api",
     "test:tz": "cross-env TZ=America/New_York npm test -w apps/api",
     "test:scripts": "node --test scripts/trace-rules.test.mjs",
     "trace-rules": "node scripts/trace-rules.mjs",
     "test:int": "npm run test:int -w apps/api",
     "smoke:compose": "node scripts/smoke-compose.mjs",
-    "build": "npm run build -w apps/api && npm run build -w apps/web"
+    "build": "npm run build -w apps/api && npm run build -w apps/web",
+    "e2e": "npm test -w e2e",
+    "e2e:reset": "npm run reset -w e2e"
   },
   "devDependencies": {
     "cross-env": "^10.0.0"
