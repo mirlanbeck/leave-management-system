@@ -9,11 +9,14 @@
   },
   "scripts": {
     "lint": "npm run lint:check -w apps/api",
-    "typecheck": "npm run typecheck -w apps/api",
+    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web",
     "test": "npm test -w apps/api",
     "test:tz": "cross-env TZ=America/New_York npm test -w apps/api",
     "test:scripts": "node --test scripts/trace-rules.test.mjs",
-    "trace-rules": "node scripts/trace-rules.mjs"
+    "trace-rules": "node scripts/trace-rules.mjs",
+    "test:int": "npm run test:int -w apps/api",
+    "smoke:compose": "node scripts/smoke-compose.mjs",
+    "build": "npm run build -w apps/api && npm run build -w apps/web"
   },
   "devDependencies": {
     "cross-env": "^10.0.0"

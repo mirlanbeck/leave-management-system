@@ -1,0 +1,17 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Временная таблица S0-b: нужна только чтобы `migrate deploy` было что применять.
+// В коде не используется; S1 удаляет её миграцией DROP TABLE.
+model AppMeta {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+}
