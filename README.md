@@ -56,7 +56,7 @@ Full-stack employee leave management system with leave balance tracking, approva
 
 ### Работает
 
-S0: `docker compose up` поднимает postgres, mailpit, api и web, у каждого healthcheck; `GET /health` проверяет БД; миграции и seed (пока пустой) при старте api; страница web открывается и показывает статус API; Clock и `scripts/trace-rules.mjs` (S0-a). CI (GitHub Actions): lint, typecheck, unit и integration с Postgres в двух часовых поясах (по умолчанию и `America/New_York`), trace-rules, e2e, `fresh-clone`; `npm run e2e:reset` (TRUNCATE таблиц приложения и очистка Mailpit, API перезапуска не требует); Playwright с одним воркером и smoke «страница открывается» (S0-c).
+S0: `docker compose up` поднимает postgres, mailpit, api и web, у каждого healthcheck; `GET /health` проверяет БД; миграции и seed (пока пустой) при старте api; страница web открывается и показывает статус API; Clock и `scripts/trace-rules.mjs` (S0-a). CI (GitHub Actions): lint, typecheck, unit и integration с Postgres в двух часовых поясах (по умолчанию и `America/New_York`), trace-rules, e2e, `fresh-clone`; `npm run e2e:reset` (TRUNCATE таблиц приложения и очистка Mailpit, API перезапуска не требует); Playwright с одним воркером и smoke «страница открывается» (S0-c). Эпик S0 закрыт (PR #4, #5, #7, #9). Следующий этап: S1.
 
 ### Не работает
 
