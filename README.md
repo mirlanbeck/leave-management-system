@@ -43,7 +43,7 @@ Full-stack employee leave management system with leave balance tracking, approva
 | Этап                                       | Статус   |
 | ------------------------------------------ | -------- |
 | S0 Скелет                                  | готов    |
-| S1 Архитектура и модель данных             | не начат |
+| S1 Архитектура и модель данных             | в работе |
 | S2 Доменная логика                         | не начат |
 | S3 Вход, роли, демо-часы                   | не начат |
 | S4 Подача заявки                           | не начат |
@@ -58,9 +58,11 @@ Full-stack employee leave management system with leave balance tracking, approva
 
 S0: `docker compose up` поднимает postgres, mailpit, api и web, у каждого healthcheck; `GET /health` проверяет БД; миграции и seed (пока пустой) при старте api; страница web открывается и показывает статус API; Clock и `scripts/trace-rules.mjs` (S0-a). CI (GitHub Actions): lint, typecheck, unit и integration с Postgres в двух часовых поясах (по умолчанию и `America/New_York`), trace-rules, e2e, `fresh-clone`; `npm run e2e:reset` (TRUNCATE таблиц приложения и очистка Mailpit, API перезапуска не требует); Playwright с одним воркером и smoke «страница открывается» (S0-c). Эпик S0 закрыт (PR #4, #5, #7, #9). Следующий этап: S1.
 
+S1 (S1-a, схема и ограничения БД): таблицы User, Vacation, LedgerEntry, OutboxMessage и ClockState (`apps/api/prisma/schema.prisma`, миграция `s1_data_model`); ограничения БД: нет пересечения одобренных отпусков, одна заявка в пределах года, минимум 1 рабочий день, один пользователь без начальника, один ожидающий перенос на отпуск, одно списание и один возврат на заявку, возврат привязан к списанию корня цепочки переносов и не превышает списанного, одно письмо на «тип + отпуск + получатель», одна строка состояния демо-часов; временная таблица `AppMeta` удалена. Integration-тесты на Postgres (`npm run test:int`, в CI в двух часовых поясах); в CI проверка, что миграция не расходится со схемой (`db:drift`). `architecture.md` и контракт API (S1-b) ещё не готовы.
+
 ### Не работает
 
-Бизнес-функций (вход, заявки, баланс) нет. Таблица `AppMeta` временная, её убирает S1. Вход seed-пользователем в `fresh-clone` и seed в `e2e:reset` появятся в S3. Проверка `/health` после `prisma migrate reset` ограничена `SELECT 1` (DECISIONS 2026-10-23 19:41).
+Бизнес-функций (вход, заявки, баланс) нет: схема БД есть, логики поверх неё пока нет. «Хотя бы один пользователь без начальника» БД не гарантирует (только «не больше одного»): это проверит seed в S3. Вход seed-пользователем в `fresh-clone` и seed в `e2e:reset` появятся в S3. Проверка `/health` после `prisma migrate reset` ограничена `SELECT 1` (DECISIONS 2026-10-23 19:41); на запросах к таблицам приложения её перепроверим в S3.
 
 ### Не делали и почему
 
