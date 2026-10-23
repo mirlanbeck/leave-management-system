@@ -1,0 +1,21 @@
+{
+  "name": "leave-management-system",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "lint": "npm run lint:check -w apps/api",
+    "typecheck": "npm run typecheck -w apps/api",
+    "test": "npm test -w apps/api",
+    "test:tz": "cross-env TZ=America/New_York npm test -w apps/api",
+    "test:scripts": "node --test scripts/trace-rules.test.mjs",
+    "trace-rules": "node scripts/trace-rules.mjs"
+  },
+  "devDependencies": {
+    "cross-env": "^10.0.0"
+  }
+}
