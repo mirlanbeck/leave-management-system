@@ -28,8 +28,6 @@ NestJS, Prisma, PostgreSQL, React, Playwright, Jest. Почта в разраб�
 
 ## Команды
 
-<!-- TODO: уточнить после #1 (скелет проекта) -->
-
 - Поднять всё: `docker compose up`
 - Тесты бэкенда: `npm test`
 - e2e: `npx playwright test`
@@ -37,8 +35,6 @@ NestJS, Prisma, PostgreSQL, React, Playwright, Jest. Почта в разраб�
 - Тесты времени дополнительно с `TZ=America/New_York` (ловят ошибки перехода на летнее время, которых в Бишкеке нет).
 
 ## Структура репозитория
-
-<!-- TODO: решить на этапе 0 (монорепо или раздельные папки) и записать в DECISIONS.md -->
 
 - `docs/RULES.md`: доменные правила
 - `docs/ROADMAP.md`: дорожная карта
