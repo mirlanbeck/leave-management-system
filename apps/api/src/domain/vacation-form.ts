@@ -8,6 +8,7 @@ export type VacationFormErrorCode =
   | 'VACATION_CROSSES_YEAR'
   | 'VACATION_NO_WORK_DAYS'
   | 'NO_ACCRUAL_YET'
+  | 'VACATION_BEFORE_HIRE'
   | 'PAST_START_YEAR'
   | 'PAST_COMMENT_REQUIRED';
 
@@ -33,6 +34,7 @@ export function checkVacationForm(
   if (countWorkDays(startDate, endDate) === 0) return 'VACATION_NO_WORK_DAYS'; // RULES §3-4 п.2
   if (compareDates(today, firstAccrualDate(hireDate)) < 0)
     return 'NO_ACCRUAL_YET'; // RULES §3-6
+  if (compareDates(startDate, hireDate) < 0) return 'VACATION_BEFORE_HIRE'; // RULES §3-12
   if (compareDates(startDate, today) < 0) {
     // «в прошлом» = начало раньше сегодня; начало сегодня не считается (RULES §3-7)
     if (yearOf(startDate) < yearOf(today)) return 'PAST_START_YEAR';
