@@ -267,3 +267,30 @@ describe('свойства баланса', () => {
     );
   });
 });
+
+describe('проверка дат-входов today и on', () => {
+  const bad = ['2026-5-1', '2026-02-30', 'abc', ''];
+  const message = (value: string) =>
+    new RangeError(`Некорректная дата: ${value}`);
+
+  // RULES §1-4
+  it.each(bad)('balanceToday: today=%j даёт RangeError', (today) => {
+    const call = () => balanceToday(input('2026-04-01', today));
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(message(today));
+  });
+
+  // RULES §1-4
+  it.each(bad)('availableOn: today=%j даёт RangeError', (today) => {
+    const call = () => availableOn(input('2026-04-01', today), '2026-12-01');
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(message(today));
+  });
+
+  // RULES §1-4
+  it.each(bad)('availableOn: on=%j даёт RangeError', (on) => {
+    const call = () => availableOn(input('2026-04-01', '2026-10-24'), on);
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(message(on));
+  });
+});

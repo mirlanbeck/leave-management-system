@@ -124,3 +124,15 @@ describe('accrualEvents', () => {
     ]);
   });
 });
+
+describe('accrualEvents: проверка until', () => {
+  // RULES §1-4
+  it.each(['2026-5-1', '2026-02-30', 'abc', ''])(
+    'until=%j даёт RangeError с переданным значением',
+    (until) => {
+      const call = () => accrualEvents('2026-04-01', until);
+      expect(call).toThrow(RangeError);
+      expect(call).toThrow(new RangeError(`Некорректная дата: ${until}`));
+    },
+  );
+});

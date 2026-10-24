@@ -3,7 +3,7 @@ import {
   AccrualEvent,
   CARRYOVER_CAP_HALF_DAYS,
 } from './accrual';
-import { CalendarDate, dayOf } from './calendar-date';
+import { CalendarDate, compareDates, dayOf } from './calendar-date';
 
 /** Запись журнала: списание или возврат (RULES §6-6). `halfDays` ≥ 0, знак задаёт `kind`. */
 export interface LedgerAction {
@@ -62,8 +62,8 @@ export function balanceToday({
  */
 export function availableOn(input: BalanceInput, on: CalendarDate): number {
   const start = balanceToday(input);
-  if (on <= input.today) return start;
+  if (compareDates(on, input.today) <= 0) return start;
   return accrualEvents(input.hireDate, on)
-    .filter((e) => e.date > input.today)
+    .filter((e) => compareDates(e.date, input.today) > 0)
     .reduce(applyEvent, start);
 }
