@@ -62,6 +62,14 @@ describe('reminderDate', () => {
     expect(reminderDate(start, n)).toBe(expected);
   });
 
+  // RULES §1-1, §8-3
+  it.each([
+    ['2027-01-01', 3, '2026-12-29'], // пятница, 1 января — рабочий день: 31.12, 30.12, 29.12
+    ['2027-01-01', 1, '2026-12-31'],
+  ])('начало 1 января: %s, N=%i → %s', (start, n, expected) => {
+    expect(reminderDate(start, n)).toBe(expected);
+  });
+
   // RULES §8-3
   it.each([0, -1, 2.5, Number.NaN])('N=%s недопустимо', (n) => {
     expect(() => reminderDate('2026-11-10', n)).toThrow(RangeError);
@@ -106,6 +114,17 @@ describe('refundHalfDays', () => {
   it('выход в выходной в конце отпуска даёт 0 (допустимо по схеме)', () => {
     expect(refundHalfDays('2026-10-19', '2026-10-25', '2026-10-24')).toBe(0);
   });
+
+  // RULES §5-6
+  it.each([
+    ['2026-10-25', '2026-10-25'], // воскресенье — дата окончания
+    ['2026-10-24', '2026-10-24'], // суббота — дата окончания
+  ])(
+    'отпуск 19.10–%s, выход в день окончания (выходной) %s → 0',
+    (endDate, returnDate) => {
+      expect(refundHalfDays('2026-10-19', endDate, returnDate)).toBe(0);
+    },
+  );
 
   // RULES §5-11
   it.each(['2026-10-18', '2026-10-31'])(
