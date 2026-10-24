@@ -1,5 +1,6 @@
 import {
   CalendarDate,
+  compareDates,
   daysInMonth,
   firstOfNextMonth,
   formatDate,
@@ -47,10 +48,11 @@ export function accrualEvents(
   hireDate: CalendarDate,
   until: CalendarDate,
 ): AccrualEvent[] {
+  parseDate(until); // RULES §1-4: формат проверяется до сравнений
   const events: AccrualEvent[] = [];
   let date = firstAccrualDate(hireDate);
   let halfDays = firstAccrualHalfDays(workedDaysInFirstMonth(hireDate));
-  while (date <= until) {
+  while (compareDates(date, until) <= 0) {
     events.push({ date, kind: 'ACCRUAL', halfDays });
     if (date.endsWith('-01-01')) events.push({ date, kind: 'TRIM' });
     halfDays = MONTHLY_HALF_DAYS;
