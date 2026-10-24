@@ -1007,6 +1007,7 @@ components:
 | `BACKSTOPPER_IS_SELF` | Нельзя указать себя заменяющим | §3-3 |
 | `BACKSTOPPER_NOT_FOUND` | Заменяющий сотрудник не найден | §3-3 |
 | `NO_ACCRUAL_YET` | У вас ещё нет накопленных дней | §3-6 (RULES) |
+| `VACATION_BEFORE_HIRE` | Дата начала отпуска раньше даты вашего выхода на работу | §3-12 |
 | `PAST_START_YEAR` | Начало отпуска в прошлом году: такая заявка не принимается | §3-7 |
 | `PAST_COMMENT_REQUIRED` | Для отпуска с датой в прошлом укажите причину в комментарии | §3-7 |
 | `INSUFFICIENT_BALANCE` | Не хватает дней: доступно {available}, в заявке {requested} | §3-9 |
@@ -1045,8 +1046,8 @@ components:
 
 Возвращается **одна, первая по порядку** ошибка (RULES: «система объясняет причину»). Порядок — проектное решение: сначала форма и справочные поля, затем правила дробления, затем зависящие от данных.
 
-- **Подача:** `VALIDATION_FAILED` → `BACKSTOPPER_REQUIRED` → `BACKSTOPPER_IS_SELF` → `BACKSTOPPER_NOT_FOUND` → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `NO_ACCRUAL_YET` → `PAST_START_YEAR` → `PAST_COMMENT_REQUIRED` → `VACATION_OVERLAP` → `INSUFFICIENT_BALANCE`.
-- **Перенос:** состояние исходного отпуска (`TRANSFER_SOURCE_NOT_APPROVED`, `TRANSFER_ALREADY_PENDING`, `TRANSFER_STARTED`) → `VALIDATION_FAILED` → проверки backstopper → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `TRANSFER_START_IN_PAST` → `TRANSFER_WORKDAYS_MISMATCH` → `VACATION_OVERLAP`. Проверки `NO_ACCRUAL_YET`, `PAST_*` и `INSUFFICIENT_BALANCE` к переносу не применяются (остаток не проверяется, перенос в прошлое запрещён отдельным правилом, §5-2).
+- **Подача:** `VALIDATION_FAILED` → `BACKSTOPPER_REQUIRED` → `BACKSTOPPER_IS_SELF` → `BACKSTOPPER_NOT_FOUND` → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `NO_ACCRUAL_YET` → `VACATION_BEFORE_HIRE` → `PAST_START_YEAR` → `PAST_COMMENT_REQUIRED` → `VACATION_OVERLAP` → `INSUFFICIENT_BALANCE`.
+- **Перенос:** состояние исходного отпуска (`TRANSFER_SOURCE_NOT_APPROVED`, `TRANSFER_ALREADY_PENDING`, `TRANSFER_STARTED`) → `VALIDATION_FAILED` → проверки backstopper → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `TRANSFER_START_IN_PAST` → `TRANSFER_WORKDAYS_MISMATCH` → `VACATION_OVERLAP`. Проверки `NO_ACCRUAL_YET`, `VACATION_BEFORE_HIRE` (§3-12), `PAST_*` и `INSUFFICIENT_BALANCE` к переносу не применяются (остаток не проверяется, перенос в прошлое запрещён отдельным правилом, §5-2).
 - **Согласование:** `NOT_FOUND` → `NOT_APPROVER`/`APPROVE_OWN_REQUEST` → `ALREADY_PROCESSED` → `TRANSFER_APPROVE_AFTER_START` или `APPROVE_INSUFFICIENT_BALANCE`.
 
 ### Соответствие ограничениям БД
