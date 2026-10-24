@@ -88,6 +88,34 @@ describe('balanceToday: обрезка 15 дней на 1 января', () => {
     ).toBe(20);
   });
 
+  // RULES §6-6 (G-1: возврат 31 декабря против 1 января)
+  it('возврат 31 декабря (17:59Z) идёт до обрезки: 30 + 10 + 5 = 45 → 30', () => {
+    const ledger = [
+      debit(10, '2026-12-02T05:00:00Z'),
+      refund(10, '2026-12-31T17:59:00Z'),
+    ];
+    expect(balanceToday(input(HIRE, '2027-01-01', ledger))).toBe(30);
+  });
+
+  // RULES §6-6 (G-1)
+  it('возврат 1 января (18:00Z) идёт после обрезки: 30 + 5 → 30, затем + 10 = 40', () => {
+    const ledger = [
+      debit(10, '2026-12-02T05:00:00Z'),
+      refund(10, '2026-12-31T18:00:00Z'),
+    ];
+    expect(balanceToday(input(HIRE, '2027-01-01', ledger))).toBe(40);
+  });
+
+  // RULES §2-5 (G-2: обрезка — ограничение сверху, 29 и 30 не меняются)
+  it.each([
+    [16, 29], // 40 − 16 + 5 = 29
+    [15, 30], // 40 − 15 + 5 = 30
+    [14, 30], // 40 − 14 + 5 = 31 → 30 (контроль)
+  ])('списание %i до 1 января → остаток %i', (debited, expected) => {
+    const ledger = [debit(debited, '2026-12-02T05:00:00Z')];
+    expect(balanceToday(input(HIRE, '2027-01-01', ledger))).toBe(expected);
+  });
+
   // RULES §6-6 (возврат после обрезки)
   it('возврат после обрезки не обрезается: 10 → 15 дней, возврат 30 → 45 половинок', () => {
     const ledger = [
@@ -125,6 +153,13 @@ describe('balanceToday: журнал', () => {
     expect(
       balanceToday({ ...input(HIRE, '2027-01-01', ledger), tz: 'UTC' }),
     ).toBe(30);
+  });
+
+  // RULES §6-6 (G-7: обычное 1-е число, начисление и действие одного дня)
+  it('списание в день начисления (1 декабря): 35 + 5 − 10 = 30', () => {
+    const ledger = [debit(10, '2026-12-01T05:00:00Z')];
+    expect(balanceToday(input(HIRE, '2026-11-30', []))).toBe(35);
+    expect(balanceToday(input(HIRE, '2026-12-01', ledger))).toBe(30);
   });
 
   // RULES §6-6 (сдвиг даты выхода пересчитывает начисления, но не списания)
@@ -172,6 +207,15 @@ describe('availableOn («доступно на D»)', () => {
     expect(availableOn(i, '2026-12-01')).toBe(40);
     expect(availableOn(i, '2026-12-31')).toBe(40);
     expect(availableOn(i, '2027-01-01')).toBe(30); // 40 + 5 → обрезка 30, начисление ровно одно
+    expect(availableOn(i, '2027-02-01')).toBe(35);
+  });
+
+  // RULES §3-10 (G-3: сегодня = 1 января, начисление и обрезка уже в балансе)
+  it('сегодня = 1 января: начисление и обрезка повторно не считаются', () => {
+    const i = input(HIRE, '2027-01-01');
+    expect(balanceToday(i)).toBe(30);
+    expect(availableOn(i, '2027-01-01')).toBe(30);
+    expect(availableOn(i, '2027-01-02')).toBe(30);
     expect(availableOn(i, '2027-02-01')).toBe(35);
   });
 
