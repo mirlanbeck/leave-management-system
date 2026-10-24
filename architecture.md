@@ -48,7 +48,7 @@ flowchart LR
 | Календарные даты (`startDate`, `endDate`, `hireDate`, `returnDate`) | тип `DATE`, в API строка `YYYY-MM-DD` | везде |
 | Моменты | `timestamptz`, в API ISO-8601 UTC | везде |
 
-- **Clock** ([clock.ts](apps/api/src/clock/clock.ts)): `now(): Date`; `SystemClock`, `FakeClock`. В S3 добавляется реализация, читающая строку `ClockState` при каждом вызове (без кэша) и создающая её при отсутствии (RULES §9-2).
+- **Clock** ([clock.ts](apps/api/src/clock/clock.ts)): `now(): Promise<Date>` (асинхронный, потому что в демо-режиме значение читается из БД); `SystemClock`, `FakeClock` (тесты), `DbClock` ([db-clock.ts](apps/api/src/clock/db-clock.ts)): читает строку `ClockState` при каждом вызове (без кэша) и при отсутствии создаёт её значением реального момента (`INSERT ... ON CONFLICT DO NOTHING`, параллельные первые вызовы дают одну строку, RULES §9-2). `DbClock` не зависит от Nest, его использует и seed. Выбор реализации — в `ClockModule`: `DEMO_MODE` строго `"true"` даёт `DbClock`, иначе `SystemClock`, сохранённое значение игнорируется. «Сегодня» — `companyToday(now, tz)` от момента, который дал Clock (проектное решение S3-a, DECISIONS).
 - «День» момента определяется по `COMPANY_TZ`: `2026-12-31T18:00Z` — это 1 января в Бишкеке (тест [dates.int.spec.ts](apps/api/src/db/dates.int.spec.ts)).
 - Prisma возвращает `DATE` как `Date` в полночь UTC; в домене даты — строки `YYYY-MM-DD`.
 - Дни в домене и журнале — целое число **половинок дня** (`halfDays`). `Vacation.workDays` — целые рабочие дни заявки, `halfDays = workDays × 2`. В API дни — число, кратное 0,5 (точно представимо в JSON).
@@ -274,7 +274,7 @@ flowchart TD
 
 | Модуль | Ответственность | Владеет таблицами | Публичный интерфейс | Этап |
 |---|---|---|---|---|
-| **clock** | единственный источник «сейчас»; демо-часы в БД; установка часов | `ClockState` | `Clock.now()`, `setDemoClock(instant)`, `today(): YYYY-MM-DD` по `COMPANY_TZ` | S0, S3 |
+| **clock** | единственный источник «сейчас»; демо-часы в БД; установка часов | `ClockState` | `await Clock.now()`, `DbClock.set(instant)`, `companyToday(now, tz): YYYY-MM-DD` по `COMPANY_TZ` | S0, S3 |
 | **auth** | вход по логину и паролю, JWT (8 ч, системные часы), guard, признак `accessGranted` | — (читает/пишет `User`) | `login()`, `JwtGuard`, `@Roles()` | S3 |
 | **org** | структура: руководитель, подчинённые, роли, `approverOf`, `visibleTo`, справочник | `User` | `rolesOf(user)`, `approverOf(employee)`, `visibleTo(viewer)`, `canSee(viewer, employeeId)`, `directory()` | S3 |
 | **balance** | журнал и баланс: чтение свёртки, запись списания и возврата | `LedgerEntry` | `balanceToday(employee)`, `availableOn(employee, D)`, `debit(tx, vacation)`, `refund(tx, vacation, halfDays)` | S2, S4–S6 |
@@ -498,18 +498,23 @@ paths:
     put:
       tags: [demo-clock]
       summary: Установить демо-часы (только DEMO_MODE=true, иначе 404)
-      description: После установки часов синхронно, до ответа, выполняется проход планировщика (RULES §9-4).
+      description: >
+        Дата и время передаются в часовом поясе компании (COMPANY_TZ), сервер сам переводит их в момент UTC
+        (браузер часовыми поясами не занимается; форма подставляет время 09:00 по умолчанию, RULES §9-3).
+        После установки часов синхронно, до ответа, выполняется проход планировщика (RULES §9-4, с S7).
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [instant]
+              required: [date, time]
               properties:
-                instant: { type: string, format: date-time }
+                date: { type: string, format: date, example: "2026-10-21" }
+                time: { type: string, pattern: "^([01]\d|2[0-3]):[0-5]\d$", example: "09:00" }
       responses:
         "200": { $ref: "#/components/responses/Clock" }
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED (формат даты или времени, несуществующее время в поясе компании)
         "404": { $ref: "#/components/responses/Problem" }
   /me:
     get:
