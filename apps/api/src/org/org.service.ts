@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth-user';
 import { PrismaService } from '../prisma/prisma.service';
-import { canSee, rolesOf, scope, type Scope } from './policy';
+import { approverOf, canSee, rolesOf, scope, type Scope } from './policy';
+
+/** «id + имя»: единственные поля, которые видят все (RULES §3-3, §7-2). */
+export interface EmployeeRef {
+  id: number;
+  fullName: string;
+}
 
 export interface Profile {
   id: number;
@@ -33,6 +39,33 @@ export class OrgService {
 
   async canSee(viewer: AuthUser, employeeId: number): Promise<boolean> {
     return canSee(viewer, await this.directReportIds(viewer.id), employeeId);
+  }
+
+  /** Справочник «id + имя» для выбора backstopper, без вошедшего (RULES §3-3). */
+  directory(viewerId: number): Promise<EmployeeRef[]> {
+    return this.prisma.user.findMany({
+      where: { id: { not: viewerId } },
+      select: { id: true, fullName: true },
+      orderBy: [{ fullName: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /** Согласующий заявки сотрудника: руководитель, у директора HR (RULES §4-1, §4-2). */
+  async approverOf(
+    employee: Pick<AuthUser, 'managerId'>,
+  ): Promise<EmployeeRef> {
+    const hr = await this.prisma.user.findFirst({
+      where: { isHr: true },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    if (employee.managerId === null && !hr) {
+      throw new Error('в системе нет HR: согласующего директора нет');
+    }
+    return this.prisma.user.findUniqueOrThrow({
+      where: { id: approverOf(employee, hr?.id ?? -1) },
+      select: { id: true, fullName: true },
+    });
   }
 
   async profile(user: AuthUser): Promise<Profile> {

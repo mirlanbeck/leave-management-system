@@ -35,7 +35,7 @@ describe('все маршруты закрыты (RULES §7-1)', () => {
   afterAll(() => app.close());
 
   // RULES §7-1
-  it('краулер находит маршруты S3', () => {
+  it('краулер находит маршруты S3 и S4', () => {
     const found = listRoutes(app).map(label);
     expect(found).toEqual(
       expect.arrayContaining([
@@ -45,6 +45,10 @@ describe('все маршруты закрыты (RULES §7-1)', () => {
         'GET /me',
         'GET /clock',
         'PUT /clock',
+        'GET /employees',
+        'GET /me/balance',
+        'GET /vacations',
+        'GET /vacations/:id',
       ]),
     );
   });

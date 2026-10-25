@@ -1,5 +1,5 @@
 import fc from 'fast-check';
-import { canSee, rolesOf, scope, type OrgUser } from './policy';
+import { approverOf, canSee, rolesOf, scope, type OrgUser } from './policy';
 
 // Структура RULES §7: директор <- зам <- (HR, Р1, Р2); Р1 <- С1; Р2 <- С2
 const users: OrgUser[] = [
@@ -87,5 +87,25 @@ describe('scope', () => {
         },
       ),
     );
+  });
+});
+
+describe('approverOf', () => {
+  const HR_ID = 3;
+
+  // RULES §4-1: согласует непосредственный руководитель, в том числе заявки заместителя и HR
+  it.each([
+    [2, 1], // заместитель -> директор
+    [3, 2], // HR -> заместитель
+    [4, 2], // Р1 -> заместитель
+    [6, 4], // С1 -> Р1
+    [7, 5], // С2 -> Р2
+  ])('сотрудник %i -> согласующий %i', (employeeId, expected) => {
+    expect(approverOf(byId(employeeId), HR_ID)).toBe(expected);
+  });
+
+  // RULES §4-2: заявки директора (начальника нет) подтверждает HR («допуск HR»)
+  it('директор -> HR', () => {
+    expect(approverOf(byId(1), HR_ID)).toBe(HR_ID);
   });
 });
