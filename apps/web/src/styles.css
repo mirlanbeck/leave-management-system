@@ -1,0 +1,76 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #1c2430;
+  background: #f6f7f9;
+}
+body {
+  margin: 0;
+}
+main,
+.state {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #d9dde3;
+}
+.topbar nav {
+  display: flex;
+  gap: 0.75rem;
+}
+.topbar a {
+  color: #34506f;
+  text-decoration: none;
+}
+.topbar a.active {
+  font-weight: 600;
+  text-decoration: underline;
+}
+.spacer {
+  flex: 1;
+}
+.login {
+  max-width: 22rem;
+}
+form {
+  display: grid;
+  gap: 0.75rem;
+}
+label {
+  display: grid;
+  gap: 0.25rem;
+}
+input,
+button {
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+}
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 1.5rem;
+}
+dt {
+  color: #5a6677;
+}
+dd {
+  margin: 0;
+}
+.error {
+  color: #a11d1d;
+}
+.notice {
+  color: #7a5200;
+  background: #fff4d6;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+}
+.muted {
+  color: #5a6677;
+}
