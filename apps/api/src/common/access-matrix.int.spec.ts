@@ -1,5 +1,5 @@
 // Матрица доступа: маршрут x роль -> ожидаемый статус. Этапы S4-S8 дописывают сюда строки
-// (RULES §7-2). Здесь строки S3.
+// (RULES §7-2). Здесь строки S3 и S4.
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
@@ -91,6 +91,66 @@ const ROWS: Row[] = [
     demo: false,
     expected: signedIn(404),
     rules: '§9-2',
+  },
+  {
+    method: 'get',
+    path: '/employees',
+    demo: true,
+    expected: signedIn(200),
+    rules: '§3-3',
+  },
+  {
+    method: 'get',
+    path: '/me/balance',
+    demo: true,
+    expected: signedIn(200),
+    rules: '§3-10',
+  },
+  {
+    method: 'get',
+    path: '/vacations',
+    demo: true,
+    expected: signedIn(200),
+    rules: '§7-2',
+  },
+  {
+    // руководитель = есть прямые подчинённые (директор, заместитель, руководитель 1)
+    method: 'get',
+    path: '/vacations?scope=team',
+    demo: true,
+    expected: {
+      director: 200,
+      deputy: 200,
+      hr: 403,
+      manager1: 200,
+      employee1: 403,
+      preHire: 403,
+      anon: 401,
+    },
+    rules: '§7-2',
+  },
+  {
+    method: 'get',
+    path: '/vacations?scope=all',
+    demo: true,
+    expected: {
+      director: 403,
+      deputy: 403,
+      hr: 200,
+      manager1: 403,
+      employee1: 403,
+      preHire: 403,
+      anon: 401,
+    },
+    rules: '§7-2',
+  },
+  {
+    // заявки нет ни у кого: невидимая и несуществующая отвечают одинаково
+    method: 'get',
+    path: '/vacations/1',
+    demo: true,
+    expected: signedIn(404),
+    rules: '§7-2',
   },
   {
     method: 'get',
