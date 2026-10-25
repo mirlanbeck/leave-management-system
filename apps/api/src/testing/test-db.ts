@@ -3,8 +3,10 @@
 // а не обёртку Prisma. Даты передаются строками 'YYYY-MM-DD' (календарные даты, RULES §1).
 import { Pool } from 'pg';
 
+// Тесты работают только с отдельной БД *_test: рабочая leave принадлежит запущенному стеку.
 export const DATABASE_URL =
-  process.env.DATABASE_URL ?? 'postgresql://leave:leave@127.0.0.1:5432/leave';
+  process.env.DATABASE_URL ??
+  'postgresql://leave:leave@127.0.0.1:5432/leave_test';
 
 export type Db = Pick<Pool, 'query'>;
 
@@ -14,6 +16,14 @@ export function createPool(url: string = DATABASE_URL): Pool {
 
 /** TRUNCATE всех таблиц приложения, как e2e:reset (кроме _prisma_migrations). */
 export async function truncateAll(db: Db): Promise<void> {
+  const current = await db.query<{ name: string }>(
+    'SELECT current_database() AS name',
+  );
+  if (!current.rows[0].name.endsWith('_test')) {
+    throw new Error(
+      `truncateAll отказывается чистить БД "${current.rows[0].name}": имя тестовой БД должно оканчиваться на _test`,
+    );
+  }
   const { rows } = await db.query<{ tablename: string }>(
     `SELECT tablename FROM pg_tables
      WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`,
