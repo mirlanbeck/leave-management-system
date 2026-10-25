@@ -13,6 +13,7 @@ export interface ClientDeps {
 export interface ApiClient {
   get<T>(path: string): Promise<T>;
   post<T>(path: string, body: unknown): Promise<T>;
+  put<T>(path: string, body: unknown): Promise<T>;
 }
 
 export function createApiClient(deps: ClientDeps): ApiClient {
@@ -51,5 +52,6 @@ export function createApiClient(deps: ClientDeps): ApiClient {
   return {
     get: (path) => request('GET', path),
     post: (path, body) => request('POST', path, body),
+    put: (path, body) => request('PUT', path, body),
   };
 }
