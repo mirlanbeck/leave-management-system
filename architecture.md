@@ -470,6 +470,7 @@ paths:
                 properties:
                   accessToken: { type: string }
                   expiresAt: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED (пустой логин или пароль)
         "401": { $ref: "#/components/responses/Problem" }   # AUTH_INVALID_CREDENTIALS
         "403": { $ref: "#/components/responses/Problem" }   # AUTH_NOT_HIRED_YET
   /config:
@@ -494,6 +495,7 @@ paths:
       summary: Текущее значение часов (только DEMO_MODE=true, иначе 404)
       responses:
         "200": { $ref: "#/components/responses/Clock" }
+        "401": { $ref: "#/components/responses/Problem" }   # AUTH_REQUIRED, AUTH_TOKEN_EXPIRED (проверка токена раньше 404)
         "404": { $ref: "#/components/responses/Problem" }
     put:
       tags: [demo-clock]
@@ -511,10 +513,11 @@ paths:
               required: [date, time]
               properties:
                 date: { type: string, format: date, example: "2026-10-21" }
-                time: { type: string, pattern: "^([01]\d|2[0-3]):[0-5]\d$", example: "09:00" }
+                time: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$', example: "09:00" }
       responses:
         "200": { $ref: "#/components/responses/Clock" }
         "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED (формат даты или времени, несуществующее время в поясе компании)
+        "401": { $ref: "#/components/responses/Problem" }   # AUTH_REQUIRED, AUTH_TOKEN_EXPIRED
         "404": { $ref: "#/components/responses/Problem" }
   /me:
     get:
@@ -985,7 +988,9 @@ components:
 
 - `code` — стабильный идентификатор для интерфейса и тестов; `message` — русский текст для пользователя; `details` — необязательные поля для подстановки.
 - Классы: `400` — форма запроса; `401` — не вошёл; `403` — вошёл, но действие запрещено; `404` — не найдено или не видно; `409` — состояние уже изменилось; `422` — нарушено правило предметной области.
-- Необработанные ошибки сервера (`500`) возвращают `{statusCode, message}` без кода и текст каталога не используют.
+- Необработанные ошибки сервера (`500`) возвращают `{statusCode: 500, message: "Внутренняя ошибка сервера"}` без кода и стека (стек только в серверный лог). Так же, без `code`, отвечают статусы вне каталога (`405`, `413` и т. п.): `{statusCode, message}`.
+- Проверка токена идёт раньше маршрутизации по флагу: `GET`/`PUT /clock` без токена дают `401` даже без `DEMO_MODE`, `404` получает только вошедший. Неизвестный маршрут без токена отвечает `404` (до guard), существующий `401`; известное ограничение, см. §13.
+- Лишнее поле в теле запроса отклоняется: `400 VALIDATION_FAILED`, `details.fields` (поле -> сообщения). Битый JSON даёт тот же код.
 - Текст из RULES приведён дословно (отмечено «RULES»), остальные формулировки — проектные; пункт RULES, из которого следует правило, указан всегда.
 
 ### Вход и доступ
@@ -993,7 +998,7 @@ components:
 | Код | HTTP | Сообщение | RULES |
 |---|---|---|---|
 | `AUTH_INVALID_CREDENTIALS` | 401 | Неверный логин или пароль | §7-1 |
-| `AUTH_REQUIRED` | 401 | Требуется вход | §7-1 |
+| `AUTH_REQUIRED` | 401 | Требуется вход | §7-1 (нет токена, токен недействителен или подделан, пользователь по `sub` не найден; токен только из заголовка `Authorization: Bearer`) |
 | `AUTH_TOKEN_EXPIRED` | 401 | Сессия истекла, войдите снова | §7-1 (текст: DECISIONS 2026-10-22 12:15) |
 | `AUTH_NOT_HIRED_YET` | 403 | Доступ откроется в дату выхода на работу | §6-7, §2 |
 | `FORBIDDEN` | 403 | Недостаточно прав для этого действия | §7-2 |
@@ -1241,3 +1246,4 @@ pass():
 - Напоминания при позднем одобрении не создаются до S7.
 - Отмена заявки-переноса, когда старый отпуск уже начался, не проработана: действует буквальный текст §5 (ROADMAP, N4).
 - Откат демо-часов не пересчитывает журнал (§9-5).
+- Неизвестный маршрут без токена отвечает `404`, существующий `401`: по этому видны существующие маршруты. Контракт API открыт (этот документ), данных это не раскрывает; принято в S3, пересмотреть в аудите S9 (issue #2).

@@ -11,7 +11,7 @@ import {
   pgFailure,
   seedOrg,
   truncateAll,
-} from './test-db';
+} from '../testing/test-db';
 
 const CHECK_VIOLATION = '23514';
 const UNIQUE_VIOLATION = '23505';

@@ -111,3 +111,8 @@ export function dayOf(instant: Date, tz: string): CalendarDate {
   const get = (type: string) => parts.find((p) => p.type === type)!.value;
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
+
+/** Календарная дата из колонки DATE (Prisma отдаёт полночь UTC): без пояса компании и пояса процесса. */
+export function fromDbDate(d: Date): CalendarDate {
+  return formatDate(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+}

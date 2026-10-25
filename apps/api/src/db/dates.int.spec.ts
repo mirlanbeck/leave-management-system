@@ -1,7 +1,12 @@
 // Типы дат и моментов (S1): без сдвига под любым TZ процесса (CI гоняет и America/New_York).
 import { Pool } from 'pg';
 import { PrismaService } from '../prisma/prisma.service';
-import { DATABASE_URL, createPool, seedOrg, truncateAll } from './test-db';
+import {
+  DATABASE_URL,
+  createPool,
+  seedOrg,
+  truncateAll,
+} from '../testing/test-db';
 
 describe('даты и моменты (integration)', () => {
   let pool: Pool;

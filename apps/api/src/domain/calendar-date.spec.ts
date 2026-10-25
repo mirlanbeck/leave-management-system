@@ -5,6 +5,7 @@ import {
   daysInMonth,
   diffDays,
   firstOfNextMonth,
+  fromDbDate,
   isoWeekday,
   parseDate,
 } from './calendar-date';
@@ -99,5 +100,17 @@ describe('calendar-date', () => {
         },
       ),
     );
+  });
+
+  describe('fromDbDate', () => {
+    // RULES §1-3: Prisma отдаёт DATE полночью UTC, пояс процесса не должен сдвигать день
+    it('берёт календарную дату по UTC', () => {
+      expect(fromDbDate(new Date('2026-03-08T00:00:00.000Z'))).toBe(
+        '2026-03-08',
+      );
+      expect(fromDbDate(new Date('2027-01-01T00:00:00.000Z'))).toBe(
+        '2027-01-01',
+      );
+    });
   });
 });

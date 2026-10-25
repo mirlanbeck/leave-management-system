@@ -13,7 +13,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
-    "test": "jest --testPathIgnorePatterns \"\\.int\\.spec\\.ts$\"",
+    "test": "prisma generate && jest --testPathIgnorePatterns \"\\.int\\.spec\\.ts$\"",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
@@ -27,9 +27,13 @@
   "dependencies": {
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^11.0.1",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "bcryptjs": "^3.0.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "dotenv": "^17.4.2",
     "pg": "^8.23.1",
     "prisma": "7.10.1",
@@ -80,7 +84,7 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^(.{1,2}/.*).js$": "$1"
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     }
   },
   "engines": {
