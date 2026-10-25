@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { Pool } from 'pg';
-import { DATABASE_URL, createPool } from './test-db';
+import { DATABASE_URL, createPool } from '../testing/test-db';
 
 describe('миграции на пустой БД (integration)', () => {
   const dbName = `migration_check_${process.pid}`;

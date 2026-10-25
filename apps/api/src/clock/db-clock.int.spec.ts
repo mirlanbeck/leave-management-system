@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { Pool } from 'pg';
 import { AppConfigModule } from '../config/config.module';
 import { APP_ENV } from '../config/app-config';
-import { createPool, truncateAll } from '../db/test-db';
+import { createPool, truncateAll } from '../testing/test-db';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { Clock, FakeClock, SystemClock } from './clock';
