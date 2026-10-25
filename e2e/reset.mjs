@@ -1,6 +1,7 @@
 // e2e:reset (ROADMAP §0 «Изоляция e2e»): сброс данных БД и очистка Mailpit без перезапуска API.
 // TRUNCATE всех таблиц приложения, кроме _prisma_migrations; схема и соединения API не затрагиваются.
-// До S3 seed нет: точка подключения помечена ниже.
+// После TRUNCATE выполняется seed 11 демо-пользователей (S3).
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
@@ -30,9 +31,43 @@ export async function resetMailpit() {
   if (!res.ok) throw new Error(`Mailpit DELETE /api/v1/messages: ${res.status}`);
 }
 
+// Демо-часы после сброса: фиксированный момент, чтобы результаты e2e не зависели от даты запуска
+// (RULES §9-6). 2026-10-21 09:00 по Бишкеку (UTC+6) — дата из README для демо. Сценарий,
+// которому нужна другая дата, ставит часы сам. Часы выставляются до seed: от них зависит accessGranted.
+export const E2E_CLOCK = '2026-10-21T03:00:00Z';
+
+export async function setClock(instant = E2E_CLOCK) {
+  const client = new pg.Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(
+      `INSERT INTO "ClockState" (id, instant) VALUES (1, $1)
+       ON CONFLICT (id) DO UPDATE SET instant = EXCLUDED.instant, "updatedAt" = now()`,
+      [instant],
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+// Seed лежит в образе api, e2e идёт на хосте (DECISIONS 2026-10-24 22:28). Запуск из корня репозитория.
+export function seedDb() {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const res = spawnSync('docker', ['compose', 'exec', '-T', 'api', 'node', 'dist/seed.js'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  if (res.status !== 0) {
+    throw new Error(
+      `seed не выполнен (запущен ли docker compose up, контейнер api?): ${res.stderr || res.error || res.status}`,
+    );
+  }
+}
+
 export async function resetAll() {
   await resetDb();
-  // TODO S3: seed (пользователи, структура команд) после TRUNCATE.
+  await setClock();
+  seedDb();
   await resetMailpit();
 }
 
