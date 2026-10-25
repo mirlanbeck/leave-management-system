@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 // В разработке /api проксируется на локальный API, как это делает nginx в compose.
 export default defineConfig({
@@ -11,5 +11,9 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
+  },
+  test: {
+    include: ['src/**/*.spec.ts'],
+    environment: 'node',
   },
 });
