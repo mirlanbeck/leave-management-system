@@ -74,3 +74,23 @@ dd {
 .muted {
   color: #5a6677;
 }
+.clock-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.4rem 1rem;
+  background: #eef2f7;
+  border-bottom: 1px solid #d9dde3;
+  font-size: 0.9rem;
+}
+.clock-strip form {
+  display: flex;
+  gap: 0.4rem;
+}
+.clock-strip .error {
+  margin: 0;
+}
+.clock-strip-error {
+  color: #5a6677;
+}
