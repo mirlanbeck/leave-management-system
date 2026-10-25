@@ -21,6 +21,17 @@ export function rolesOf(user: OrgUser, directReportIds: number[]): Roles {
   };
 }
 
+/**
+ * Согласующий заявки сотрудника (RULES §4-1, §4-2): непосредственный руководитель,
+ * у директора (начальника нет) HR («допуск HR»). Одна функция для писем и экрана согласования.
+ */
+export function approverOf(
+  employee: Pick<OrgUser, 'managerId'>,
+  hrId: number,
+): number {
+  return employee.managerId ?? hrId;
+}
+
 /** Кого видит зритель: 'ALL' (HR) или набор id (он сам и прямые подчинённые). */
 export type Scope = 'ALL' | Set<number>;
 
