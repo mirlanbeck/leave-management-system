@@ -1,11 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { DemoClockStrip } from '../clock/DemoClockStrip';
 import { allowedRoutes, ROUTE_PATHS, ROUTE_TITLES } from '../routes/access';
 
 export function Layout() {
   const { profile, logout } = useAuth();
   return (
     <>
+      <DemoClockStrip />
       <header className="topbar">
         <strong>Отпуска</strong>
         {profile && (
