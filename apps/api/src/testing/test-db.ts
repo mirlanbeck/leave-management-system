@@ -31,25 +31,113 @@ export interface NewUser {
   hireDate?: string;
   isHr?: boolean;
   teamName?: string | null;
+  fullName?: string;
+  passwordHash?: string;
+  accessGranted?: boolean;
 }
 
 export async function insertUser(db: Db, u: NewUser): Promise<number> {
   seq += 1;
   const login = u.login ?? `user${seq}`;
   const { rows } = await db.query<{ id: number }>(
-    `INSERT INTO "User" (login, email, "passwordHash", "fullName", "hireDate", "managerId", "isHr", "teamName")
-     VALUES ($1, $2, 'hash', $3, $4, $5, $6, $7) RETURNING id`,
+    `INSERT INTO "User" (login, email, "passwordHash", "fullName", "hireDate", "managerId", "isHr", "teamName",
+                         "accessGranted")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
     [
       login,
       `${login}@vacation.local`,
-      `Сотрудник ${login}`,
+      u.passwordHash ?? 'hash',
+      u.fullName ?? `Сотрудник ${login}`,
       u.hireDate ?? '2022-03-15',
       u.managerId,
       u.isHr ?? false,
       u.teamName ?? null,
+      u.accessGranted ?? false,
     ],
   );
   return rows[0].id;
+}
+
+/** Сдвиг даты выхода для фикстуры (PATCH hire-date появится в S6). */
+export async function shiftHireDate(
+  db: Db,
+  userId: number,
+  hireDate: string,
+): Promise<void> {
+  await db.query(`UPDATE "User" SET "hireDate" = $2 WHERE id = $1`, [
+    userId,
+    hireDate,
+  ]);
+}
+
+/** Структура RULES §7 (11 пользователей); даты руководителей и вышестоящих условные. */
+export type RulesOrgKey =
+  | 'director'
+  | 'deputy'
+  | 'hr'
+  | 'manager1'
+  | 'manager2'
+  | 'employee1'
+  | 'employee2'
+  | 'employee3'
+  | 'employee4'
+  | 'employee5'
+  | 'employee6';
+
+export async function seedRulesOrg(
+  db: Db,
+  passwordHash: string,
+): Promise<Record<RulesOrgKey, number>> {
+  const base = { passwordHash, accessGranted: true, hireDate: '2018-01-10' };
+  const add = (
+    login: RulesOrgKey,
+    managerId: number | null,
+    extra: Partial<NewUser> = {},
+  ) => insertUser(db, { ...base, login, managerId, ...extra });
+  const director = await add('director', null);
+  const deputy = await add('deputy', director);
+  const hr = await add('hr', deputy, { isHr: true });
+  const manager1 = await add('manager1', deputy);
+  const manager2 = await add('manager2', deputy);
+  const front = { teamName: 'Фронт-отдел' };
+  const back = { teamName: 'Бэк-отдел' };
+  const employee1 = await add('employee1', manager1, {
+    ...front,
+    hireDate: '2022-03-15',
+  });
+  const employee2 = await add('employee2', manager1, {
+    ...front,
+    hireDate: '2024-06-03',
+  });
+  const employee3 = await add('employee3', manager1, {
+    ...front,
+    hireDate: '2026-10-12',
+  });
+  const employee4 = await add('employee4', manager2, {
+    ...back,
+    hireDate: '2023-09-01',
+  });
+  const employee5 = await add('employee5', manager2, {
+    ...back,
+    hireDate: '2024-01-10',
+  });
+  const employee6 = await add('employee6', manager2, {
+    ...back,
+    hireDate: '2025-02-10',
+  });
+  return {
+    director,
+    deputy,
+    hr,
+    manager1,
+    manager2,
+    employee1,
+    employee2,
+    employee3,
+    employee4,
+    employee5,
+    employee6,
+  };
 }
 
 export interface Org {
