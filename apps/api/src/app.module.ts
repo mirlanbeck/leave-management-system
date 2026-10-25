@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
+import { BalanceModule } from './balance/balance.module';
 import { ClockModule } from './clock/clock.module';
 import { CommonModule } from './common/common.module';
 import { AppConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
 import { OrgModule } from './org/org.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { VacationsModule } from './vacations/vacations.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { PrismaModule } from './prisma/prisma.module';
     ClockModule,
     AuthModule,
     OrgModule,
+    BalanceModule,
+    VacationsModule,
     HealthModule,
   ],
 })

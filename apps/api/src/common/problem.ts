@@ -36,6 +36,7 @@ export const MESSAGES = {
   AUTH_REQUIRED: 'Требуется вход',
   AUTH_TOKEN_EXPIRED: 'Сессия истекла, войдите снова',
   AUTH_NOT_HIRED_YET: 'Доступ откроется в дату выхода на работу',
+  FORBIDDEN: 'Недостаточно прав для этого действия',
   NOT_FOUND: 'Не найдено',
   VALIDATION_FAILED: 'Некорректные данные запроса',
 } as const;
