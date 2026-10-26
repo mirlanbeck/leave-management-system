@@ -8,6 +8,7 @@ import {
   fromDbDate,
   isoWeekday,
   parseDate,
+  toDbDate,
 } from './calendar-date';
 
 describe('calendar-date', () => {
@@ -111,6 +112,16 @@ describe('calendar-date', () => {
       expect(fromDbDate(new Date('2027-01-01T00:00:00.000Z'))).toBe(
         '2027-01-01',
       );
+    });
+  });
+
+  describe('toDbDate', () => {
+    // RULES §1-4: календарная дата в колонку DATE - полночь UTC, без пояса процесса
+    it('полночь UTC и обратимость с fromDbDate', () => {
+      expect(toDbDate('2026-12-31').toISOString()).toBe(
+        '2026-12-31T00:00:00.000Z',
+      );
+      expect(fromDbDate(toDbDate('2028-02-29'))).toBe('2028-02-29');
     });
   });
 });

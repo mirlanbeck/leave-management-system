@@ -116,3 +116,9 @@ export function dayOf(instant: Date, tz: string): CalendarDate {
 export function fromDbDate(d: Date): CalendarDate {
   return formatDate(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
 }
+
+/** Значение для колонки DATE: полночь UTC (пара к `fromDbDate`), без пояса процесса. */
+export function toDbDate(date: CalendarDate): Date {
+  const { year, month, day } = parseDate(date);
+  return new Date(Date.UTC(year, month - 1, day));
+}
