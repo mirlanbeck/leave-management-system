@@ -48,6 +48,7 @@ describe('все маршруты закрыты (RULES §7-1)', () => {
         'GET /employees',
         'GET /me/balance',
         'GET /vacations',
+        'POST /vacations',
         'GET /vacations/:id',
       ]),
     );
