@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import type { App } from 'supertest/types';
 import { APP_ENV } from './app-config';
 import { AppConfigModule } from './config.module';
 
@@ -21,7 +22,7 @@ describe('GET /config', () => {
   it('публичный: без токена отдаёт признак демо-режима и пояс компании', async () => {
     const app = await createApp({ DEMO_MODE: 'true', COMPANY_TZ: 'UTC' });
     try {
-      const res = await request(app.getHttpServer()).get('/config');
+      const res = await request(app.getHttpServer() as App).get('/config');
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ demoMode: true, companyTz: 'UTC' });
     } finally {
@@ -33,7 +34,7 @@ describe('GET /config', () => {
   it('без флага demoMode = false, пояс по умолчанию Asia/Bishkek', async () => {
     const app = await createApp({ DEMO_MODE: 'True' });
     try {
-      const res = await request(app.getHttpServer()).get('/config');
+      const res = await request(app.getHttpServer() as App).get('/config');
       expect(res.body).toEqual({ demoMode: false, companyTz: 'Asia/Bishkek' });
     } finally {
       await app.close();

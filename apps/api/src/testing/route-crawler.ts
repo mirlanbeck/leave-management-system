@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- тела ответов supertest имеют тип any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- тела ответов supertest имеют тип any */
 // Краулер маршрутов: обходит все контроллеры приложения и без токена вызывает каждый маршрут
 // (RULES §7-1: «все маршруты закрыты, открытые помечены @Public()»).
 import { INestApplication, RequestMethod } from '@nestjs/common';
