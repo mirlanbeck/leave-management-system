@@ -43,6 +43,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-demo-only-not-for-production}
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      # Диспетчер outbox (RULES §9-1: системные часы; architecture §10)
+      MAIL_FROM: "${MAIL_FROM:-Отпуска <noreply@vacation.local>}"
+      OUTBOX_POLL_MS: ${OUTBOX_POLL_MS:-2000}
+      OUTBOX_RETRY_BASE_MS: ${OUTBOX_RETRY_BASE_MS:-5000}
+      OUTBOX_RETRY_MAX_MS: ${OUTBOX_RETRY_MAX_MS:-300000}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
