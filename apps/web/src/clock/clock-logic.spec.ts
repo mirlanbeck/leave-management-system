@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiRequestError } from '../api/problem';
 import {
+  applyClock,
   companyDate,
   DEFAULT_TIME,
   formatCompanyMoment,
@@ -80,5 +81,24 @@ describe('форма установки часов', () => {
     const view = await setClock({ put } as never, '2026-11-05', '09:00');
     expect(put).toHaveBeenCalledWith('/clock', { date: '2026-11-05', time: '09:00' });
     expect(view.now).toBe('2026-11-05T03:00:00.000Z');
+  });
+
+  // RULES §9-3, §3-10: после установки часов данные страницы считаются заново (перезагрузка)
+  it('после успешной установки страница перезагружается', async () => {
+    const put = vi.fn(async () => ({ now: '2026-11-01T03:00:00.000Z', frozen: true }));
+    const reload = vi.fn();
+    await applyClock({ put } as never, '2026-11-01', '09:00', reload);
+    expect(put).toHaveBeenCalledWith('/clock', { date: '2026-11-01', time: '09:00' });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  // RULES §9-3: ошибка показывается, перезагрузки нет
+  it('при ошибке установки страница не перезагружается', async () => {
+    const put = vi.fn(async () => {
+      throw new ApiRequestError({ status: 400, code: 'VALIDATION_FAILED', message: 'x' });
+    });
+    const reload = vi.fn();
+    await expect(applyClock({ put } as never, '', '09:00', reload)).rejects.toBeInstanceOf(ApiRequestError);
+    expect(reload).not.toHaveBeenCalled();
   });
 });
