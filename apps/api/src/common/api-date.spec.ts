@@ -1,5 +1,5 @@
 import { ApiError } from './problem';
-import { parseApiDate } from './api-date';
+import { parseApiDate, parseApiDates } from './api-date';
 
 function failure(fn: () => unknown): ApiError {
   try {
@@ -42,4 +42,26 @@ describe('parseApiDate (граница дат API)', () => {
       expect(Object.keys(e.details?.fields as object)).toEqual(['startDate']);
     },
   );
+});
+
+describe('parseApiDates (несколько дат тела)', () => {
+  // RULES §1-4
+  it('все даты корректны: возвращает их', () => {
+    expect(
+      parseApiDates({ startDate: '2026-11-02', endDate: '2026-11-06' }),
+    ).toEqual({ startDate: '2026-11-02', endDate: '2026-11-06' });
+  });
+
+  // RULES §1-4: ошибки всех полей в одном ответе
+  it('две неверные даты: оба поля в details.fields', () => {
+    const e = failure(() =>
+      parseApiDates({ startDate: 'x', endDate: '2101-01-01' }),
+    );
+    expect(e.getStatus()).toBe(400);
+    expect(e.code).toBe('VALIDATION_FAILED');
+    expect(Object.keys(e.details?.fields as object).sort()).toEqual([
+      'endDate',
+      'startDate',
+    ]);
+  });
 });

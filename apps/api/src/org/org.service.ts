@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth-user';
+import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { approverOf, canSee, rolesOf, scope, type Scope } from './policy';
 
@@ -50,11 +51,15 @@ export class OrgService {
     });
   }
 
-  /** Согласующий заявки сотрудника: руководитель, у директора HR (RULES §4-1, §4-2). */
+  /**
+   * Согласующий заявки сотрудника: руководитель, у директора HR (RULES §4-1, §4-2).
+   * `db` - клиент транзакции, если вызов идёт внутри операции (architecture §4).
+   */
   async approverOf(
     employee: Pick<AuthUser, 'managerId'>,
+    db: Pick<Prisma.TransactionClient, 'user'> = this.prisma,
   ): Promise<EmployeeRef> {
-    const hr = await this.prisma.user.findFirst({
+    const hr = await db.user.findFirst({
       where: { isHr: true },
       select: { id: true },
       orderBy: { id: 'asc' },
@@ -62,7 +67,7 @@ export class OrgService {
     if (employee.managerId === null && !hr) {
       throw new Error('в системе нет HR: согласующего директора нет');
     }
-    return this.prisma.user.findUniqueOrThrow({
+    return db.user.findUniqueOrThrow({
       where: { id: approverOf(employee, hr?.id ?? -1) },
       select: { id: true, fullName: true },
     });

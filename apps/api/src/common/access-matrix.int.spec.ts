@@ -53,6 +53,12 @@ interface Row {
 }
 
 const CLOCK_BODY = { date: '2026-10-02', time: '09:00' };
+// заменяющий - manager2 (id 5 после TRUNCATE ... RESTART IDENTITY, порядок seedRulesOrg), не актёр
+const VACATION_BODY = {
+  startDate: '2026-11-02',
+  endDate: '2026-11-06',
+  backstopperId: 5,
+};
 
 const ROWS: Row[] = [
   {
@@ -151,6 +157,15 @@ const ROWS: Row[] = [
     demo: true,
     expected: signedIn(404),
     rules: '§7-2',
+  },
+  {
+    // подать может любой вошедший с начислением; до первого начисления 422 NO_ACCRUAL_YET
+    method: 'post',
+    path: '/vacations',
+    body: VACATION_BODY,
+    demo: true,
+    expected: { ...signedIn(201), preHire: 422 },
+    rules: '§3-6, §10-1',
   },
   {
     method: 'get',

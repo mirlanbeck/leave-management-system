@@ -27,3 +27,24 @@ export function parseApiDate(value: string, field: string): CalendarDate {
   }
   return value;
 }
+
+/** Несколько дат тела сразу: при ошибках все неверные поля попадают в один `details.fields`. */
+export function parseApiDates<K extends string>(
+  values: Record<K, string>,
+): Record<K, CalendarDate> {
+  const fields: Record<string, unknown> = {};
+  const parsed = {} as Record<K, CalendarDate>;
+  for (const key of Object.keys(values) as K[]) {
+    try {
+      parsed[key] = parseApiDate(values[key], key);
+    } catch (e) {
+      Object.assign(fields, (e as ApiError).details?.fields);
+    }
+  }
+  if (Object.keys(fields).length > 0) {
+    throw new ApiError(400, 'VALIDATION_FAILED', MESSAGES.VALIDATION_FAILED, {
+      fields,
+    });
+  }
+  return parsed;
+}
