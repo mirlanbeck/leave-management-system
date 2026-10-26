@@ -42,7 +42,8 @@ flowchart LR
 |---|---|---|
 | «Сегодня», начисление 1-го числа, 09:00, «в прошлом», «начался» | `Clock` + `COMPANY_TZ` | вся бизнес-логика |
 | `createdAt` заявки, `decidedAt`, `cancelledAt`, `LedgerEntry.occurredAt`, `OutboxMessage.createdAt` | `Clock` (БД без DEFAULT) | сервисы |
-| `OutboxMessage.nextAttemptAt`, `sentAt`, паузы повторов, опрос диспетчера | системные часы | диспетчер outbox |
+| `OutboxMessage.nextAttemptAt`, `sentAt`, паузы повторов, опрос диспетчера | системное время БД: `now()` для выбора строк, `clock_timestamp()` для `sentAt` и `nextAttemptAt`; `new Date()` в коде нет | диспетчер outbox |
+| «Сегодня» в проверке напоминания перед отправкой (§8-4) | `Clock` + `COMPANY_TZ` | диспетчер outbox |
 | Срок JWT (8 ч) | системные часы | auth |
 | `User.createdAt` | `now()` БД (технический) | БД |
 | Календарные даты (`startDate`, `endDate`, `hireDate`, `returnDate`) | тип `DATE`, в API строка `YYYY-MM-DD` | везде |
@@ -53,7 +54,7 @@ flowchart LR
 - Prisma возвращает `DATE` как `Date` в полночь UTC; в домене даты — строки `YYYY-MM-DD`.
 - Дни в домене и журнале — целое число **половинок дня** (`halfDays`). `Vacation.workDays` — целые рабочие дни заявки, `halfDays = workDays × 2`. В API дни — число, кратное 0,5 (точно представимо в JSON).
 
-Переменные окружения (compose): `COMPANY_TZ` (по умолчанию `Asia/Bishkek`), `REMINDER_DAYS` (3), `DEMO_MODE` (демо только при строгом `"true"`), `JWT_SECRET` (демо-значение), `DATABASE_URL`.
+Переменные окружения (compose): `COMPANY_TZ` (по умолчанию `Asia/Bishkek`), `REMINDER_DAYS` (3), `DEMO_MODE` (демо только при строгом `"true"`), `JWT_SECRET` (демо-значение), `DATABASE_URL`. Почта и диспетчер outbox ([раздел 10](#10-планировщик-и-outbox)): `SMTP_HOST` (`mailpit`, вне Docker `127.0.0.1`), `SMTP_PORT` (1025), `MAIL_FROM` (`Отпуска <noreply@vacation.local>`), `OUTBOX_POLL_MS` (2000), `OUTBOX_RETRY_BASE_MS` (5000), `OUTBOX_RETRY_MAX_MS` (300000).
 
 ---
 
@@ -368,7 +369,7 @@ canSee(viewer, employeeId) = employeeId ∈ scope(viewer)
 | Отмена `PENDING`, отмена переноса | `User(employee)` → `Vacation` | `status = CANCELLED`; возврата нет |
 | Отзыв HR | `User(employee)` → вся цепочка по id → списание (триггер) | `status = CANCELLED`, `returnDate`, `REFUND` |
 | Смена даты выхода | `User(employee)` | `hireDate`; журнал не трогается |
-| Диспетчер outbox | `OutboxMessage ... FOR UPDATE SKIP LOCKED` | `status`, `attempts`, `nextAttemptAt` |
+| Диспетчер outbox | `OutboxMessage ... FOR UPDATE OF o SKIP LOCKED` (строки `User` и `Vacation` из join не блокируются) | `status`, `attempts`, `lastError`, `nextAttemptAt`, `sentAt` |
 | Планировщик | нет блокировок сущностей | `INSERT ... ON CONFLICT DO NOTHING` |
 
 Правила:
@@ -1174,20 +1175,30 @@ pass():
 - **Позднее одобрение:** если при одобрении дата напоминания ≤ сегодня < даты начала, хук `onVacationApproved` создаёт `REMINDER` сразу, в любое время суток; плановое напоминание не дублируется (тот же ключ). До S7 такие напоминания не создаются (запись в «Известных ограничениях»).
 - **Перенос:** старый отпуск до утверждения остаётся `APPROVED` и его напоминание может уйти; после утверждения он `REPLACED` и не попадает в выборку; новый отпуск получает своё одно напоминание.
 
-### Диспетчер outbox (S4, системные часы, Clock не используется)
+### Диспетчер outbox (S4, системное время БД)
+
+Код: [outbox-dispatcher.ts](apps/api/src/mail/outbox-dispatcher.ts) (проход), [outbox-worker.ts](apps/api/src/mail/outbox-worker.ts) (опрос), [outbox-config.ts](apps/api/src/mail/outbox-config.ts) (параметры и пауза), [mail-transport.ts](apps/api/src/mail/mail-transport.ts) (SMTP через nodemailer).
 
 ```text
-каждые K секунд (интервалы - переменные окружения, S4):
-  выбрать PENDING с nextAttemptAt <= now() FOR UPDATE SKIP LOCKED LIMIT n
-  для REMINDER: если vacation.status != APPROVED  ->  status = SKIPPED, конец    // §8-3: проверка в момент отправки
-  отправить через SMTP (Mailpit)
-    успех:  status = SENT, sentAt = now()
-    сбой:   attempts += 1, lastError, nextAttemptAt = now() + пауза(attempts)    // нарастающая
+каждые OUTBOX_POLL_MS мс (цепочка setTimeout, проходы одного воркера не накладываются):
+  транзакция:
+    выбрать до 10 строк: PENDING и nextAttemptAt <= now()
+      ORDER BY nextAttemptAt, id  FOR UPDATE OF OutboxMessage SKIP LOCKED     // User и Vacation не блокируются (раздел 6)
+    для каждой строки по очереди:
+      REMINDER: если vacation.status != APPROVED или сегодня (Clock, COMPANY_TZ) >= startDate
+                -> status = SKIPPED, без отправки                            // §8-3, §8-4: проверка в момент отправки
+      отправить через SMTP (Mailpit)
+        успех: status = SENT, sentAt = clock_timestamp()
+        сбой:  attempts += 1, lastError, nextAttemptAt = clock_timestamp() + пауза(attempts); проход закончен
 ```
 
-- Два воркера и перезапуск между попытками дублей не дают (`SKIP LOCKED` плюс уникальный ключ).
-- Остаточный риск: сбой между ответом SMTP и пометкой `SENT` даёт повторную отправку (дубль письма, описан в README).
-- Число попыток и параметры паузы задаёт S4 (в RULES не определены).
+- **Пауза:** `min(OUTBOX_RETRY_MAX_MS, OUTBOX_RETRY_BASE_MS · 2^(attempts−1))`, по умолчанию 5 с, 10 с, 20 с … 5 мин. Лимита попыток нет, статуса `FAILED` нет (DECISIONS 2026-10-26 00:43).
+- **Время:** выбор по `now()` (начало транзакции), `sentAt` и `nextAttemptAt` по `clock_timestamp()` (факт отправки или сбоя): транзакция открыта на время SMTP. Clock не участвует в расписании попыток, поэтому при замороженных демо-часах повтор наступает (RULES §9-1). Clock нужен только для «сегодня» в проверке напоминания (§8-4).
+- **Сбой** останавливает проход: остальные строки пачки не получают `attempts + 1` и берутся следующим проходом.
+- **Таймауты SMTP** короткие (соединение 5 с, приветствие 5 с, обмен 10 с), таймаут транзакции прохода `10 × 20 с + 10 с`: зависший сервер не держит блокировку минутами.
+- Два воркера и перезапуск между попытками дублей не дают (`SKIP LOCKED`, уникальный ключ §8-3). Ошибка прохода (например, БД недоступна) пишется в лог, опрос продолжается.
+- В integration-тестах воркер подменён, тесты вызывают `OutboxDispatcher.runOnce()`; доставка через настоящий Mailpit проверяется в e2e ([mail.spec.ts](e2e/mail.spec.ts)).
+- Остаточные риски: [раздел 13](#13-проектные-решения-и-известные-ограничения).
 
 ---
 
@@ -1259,13 +1270,16 @@ pass():
 14. Порядок проверок и «одна первая ошибка» при подаче, переносе и согласовании (раздел 8).
 15. Проход планировщика после `PUT /clock` выполняется синхронно, до ответа (детерминизм e2e).
 16. Тексты и темы писем определяет S4 (`NEW_REQUEST` - [раздел 10](#10-планировщик-и-outbox)).
+17. Диспетчер outbox: пачка 10 писем, пауза с удвоением до `OUTBOX_RETRY_MAX_MS`, остановка прохода на первом сбое, `clock_timestamp()` для `sentAt` и `nextAttemptAt`, проверка «сегодня ≥ даты начала» для напоминания по Clock ([раздел 10](#10-планировщик-и-outbox)).
 
 ### Известные ограничения
 
 - «Хотя бы один» пользователь без начальника БД не проверяет (seed и тест S3).
 - `replacesId` неизменяем только по соглашению приложения.
-- Дубль письма при сбое между ответом SMTP и пометкой `SENT`.
-- Отмена, пришедшая между проверкой статуса и отправкой напоминания, не остановит это письмо.
+- Дубль письма при сбое между ответом SMTP и пометкой `SENT` (транзакция прохода откатывается, строка остаётся `PENDING`).
+- Отмена, пришедшая между проверкой статуса и отправкой напоминания, не остановит это письмо: статус отпуска читается без блокировки.
+- Транзакция прохода диспетчера открыта на время отправки: при медленном SMTP `e2e:reset` (`TRUNCATE`) ждёт её окончания, до таймаутов SMTP.
+- Напоминание, пропущенное (`SKIPPED`) из-за даты начала, не возвращается после отката демо-часов назад (§9-5).
 - Потеря SSE-событий при обрыве; остатки в календаре руководителя после смены даты выхода обновляются при перезагрузке.
 - Напоминания при позднем одобрении не создаются до S7.
 - Отмена заявки-переноса, когда старый отпуск уже начался, не проработана: действует буквальный текст §5 (ROADMAP, N4).
