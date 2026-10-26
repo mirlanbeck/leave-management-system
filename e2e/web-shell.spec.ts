@@ -38,16 +38,16 @@ test.describe('S3-d: каркас, вход и защита страниц', () 
     const nav = page.getByRole('navigation', { name: 'Разделы' });
 
     await loginAs(page, 'james');
-    await expect(nav.getByRole('link')).toHaveText(['Профиль']);
+    await expect(nav.getByRole('link')).toHaveText(['Профиль', 'Отпуск']);
 
     await page.getByRole('button', { name: 'Выйти' }).click();
     await expect(page).toHaveURL(/\/login$/);
     await signIn(page, 'daniel');
-    await expect(nav.getByRole('link')).toHaveText(['Профиль', 'Согласование']);
+    await expect(nav.getByRole('link')).toHaveText(['Профиль', 'Отпуск', 'Согласование']);
 
     await page.getByRole('button', { name: 'Выйти' }).click();
     await signIn(page, 'emily');
-    await expect(nav.getByRole('link')).toHaveText(['Профиль', 'Согласование', 'HR']);
+    await expect(nav.getByRole('link')).toHaveText(['Профиль', 'Отпуск', 'Согласование', 'HR']);
   });
 
   // RULES §7-2, §7-6

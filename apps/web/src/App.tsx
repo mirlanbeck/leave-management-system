@@ -3,6 +3,7 @@ import { AuthProvider } from './auth/AuthContext';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { VacationPage } from './pages/VacationPage';
 import { ApprovalsPage, HrPage } from './pages/StubPages';
 import { RequireAuth, RequireRole } from './routes/guards';
 
@@ -14,6 +15,7 @@ export function App() {
         <Route element={<RequireAuth />}>
           <Route element={<Layout />}>
             <Route index element={<ProfilePage />} />
+            <Route path="vacation" element={<VacationPage />} />
             <Route element={<RequireRole route="approvals" />}>
               <Route path="approvals" element={<ApprovalsPage />} />
             </Route>
