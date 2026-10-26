@@ -69,16 +69,18 @@ export function VacationForm(props: {
   return (
     <section className="panel" aria-label="Новая заявка">
       <h2>Новая заявка</h2>
-      <form onSubmit={onSubmit}>
-        <label>
-          Начало
-          <input type="date" value={values.startDate} onChange={(e) => set({ startDate: e.target.value })} />
-        </label>
-        <label>
-          Окончание
-          <input type="date" value={values.endDate} onChange={(e) => set({ endDate: e.target.value })} />
-        </label>
-        <label>
+      <form className="vacation-form" onSubmit={onSubmit}>
+        <div className="dates-row">
+          <label>
+            Начало
+            <input type="date" value={values.startDate} onChange={(e) => set({ startDate: e.target.value })} />
+          </label>
+          <label>
+            Окончание
+            <input type="date" value={values.endDate} onChange={(e) => set({ endDate: e.target.value })} />
+          </label>
+        </div>
+        <label className="backstopper">
           Заменяющий (backstopper)
           <select value={values.backstopperId} onChange={(e) => set({ backstopperId: e.target.value })}>
             <option value="">— выберите —</option>
@@ -89,7 +91,7 @@ export function VacationForm(props: {
             ))}
           </select>
         </label>
-        <label>
+        <label className="comment">
           Комментарий
           <textarea rows={3} value={values.comment} onChange={(e) => set({ comment: e.target.value })} />
         </label>

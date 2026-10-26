@@ -107,6 +107,25 @@ dd {
   margin-top: 0;
   font-size: 1.1rem;
 }
+/* Форма заявки: поля по ширине содержимого, комментарий на всю ширину */
+.vacation-form {
+  justify-items: start;
+}
+.vacation-form .dates-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+.vacation-form .backstopper,
+.vacation-form .backstopper select {
+  width: 100%;
+  max-width: 20rem;
+}
+.vacation-form .comment,
+.vacation-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
 /* Минус бывает только после сдвига даты выхода (RULES §6-4) */
 .negative {
   color: #b42318;
