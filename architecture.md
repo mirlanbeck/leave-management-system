@@ -868,12 +868,18 @@ components:
         availableOn: { type: number, nullable: true, description: "доступно на дату on" }
     VacationInput:
       type: object
-      required: [startDate, endDate, backstopperId]
+      required: [startDate, endDate]
       properties:
         startDate: { type: string, format: date }
         endDate: { type: string, format: date }
-        backstopperId: { type: integer, description: "обязателен и для переноса" }
-        comment: { type: string, nullable: true, description: "обязателен, если начало раньше сегодня" }
+        backstopperId:
+          type: integer
+          nullable: true
+          description: >
+            Обязателен по RULES §3-2 (и для переноса), но не required в схеме: отсутствие или null
+            дают 422 BACKSTOPPER_REQUIRED, а не 400; целое вне 1…2147483647 - 422 BACKSTOPPER_NOT_FOUND
+            (DECISIONS [S4])
+        comment: { type: string, nullable: true, description: "обязателен, если начало раньше сегодня; хранится обрезанным по краям, пустой - null" }
     Decision:
       type: object
       properties:
@@ -975,6 +981,7 @@ components:
 - `GET /vacations?scope=team` без прямых подчинённых и `scope=all` не для HR дают `403 FORBIDDEN`; неизвестные `scope`, `status` и лишние параметры query дают `400 VALIDATION_FAILED`. Список отсортирован по `id` по убыванию.
 - `GET /me/balance`: `balance` в днях кратно 0,5; без `on` поля `on` и `availableOn` равны `null`.
 - `GET /employees` не включает вошедшего: сервер сам исключает его, а `POST /vacations` дополнительно отклоняет `backstopperId` заявителя.
+- `POST /vacations` (S4): поля тела только `startDate`, `endDate`, `backstopperId`, `comment`; любое другое (в том числе `workDays`, `employeeId`, `status`) даёт `400 VALIDATION_FAILED`. Неверные обе даты попадают в `details.fields` вместе. `workDays` считает сервер. Комментарий хранится обрезанным по краям, пустой - `null`. `createdAt` заявки и письма - один момент Clock на запрос. Проверки, заявка и письмо `NEW_REQUEST` - в одной транзакции под `User ... FOR NO KEY UPDATE` ([раздел 6](#6-политика-блокировок)); проверки в одном месте, `evaluateSubmission` ([vacation-rules.ts](apps/api/src/vacations/vacation-rules.ts)).
 - `POST /vacations/{id}/transfer` принимает те же поля, что подача; `backstopperId` обязателен (форма подставляет прежнего). `workDays` рассчитывается сервером, не принимается от клиента.
 - Одноразовое сообщение HR «Дата изменена. Проверьте одобренные отпуска этого сотрудника» формирует интерфейс; сервер его не хранит (RULES §6-3).
 - `actions` — подсказка для показа кнопок, не источник прав.
@@ -1024,6 +1031,13 @@ components:
 | `PAST_START_YEAR` | Начало отпуска в прошлом году: такая заявка не принимается | §3-7 |
 | `PAST_COMMENT_REQUIRED` | Для отпуска с датой в прошлом укажите причину в комментарии | §3-7 |
 | `INSUFFICIENT_BALANCE` | Не хватает дней: доступно {available}, в заявке {requested} | §3-9 |
+
+Подстановки группы подачи (S4):
+
+- `VACATION_OVERLAP`: `details = {vacationId, from, to}`, даты ISO `YYYY-MM-DD`; при нескольких пересечениях берётся заявка с самой ранней датой начала. Пересечение ищется только среди `PENDING` и `APPROVED` того же сотрудника; отпуск backstopper не мешает (§3-3).
+- `INSUFFICIENT_BALANCE`: `details = {available, requested}` числами (дни, кратно 0,5); в тексте дни через запятую («2,5»), отрицательное значение с типографским минусом («−1», §6-4). `available` - «доступно на дату начала» тем же кодом, что `GET /me/balance?on=` (§3-10).
+- `BACKSTOPPER_NOT_FOUND`: также для целого `backstopperId` вне 1…2147483647 (без запроса в БД).
+- `BACKSTOPPER_*` и коды группы - без `details`.
 
 ### Согласование
 
@@ -1127,7 +1141,14 @@ interface EventBus { publish(event: DomainEvent): void }   // вызываетс
 | `DECISION` | сотрудник | при согласовании или отклонении (в том числе переноса) |
 | `REMINDER` | сотрудник и его руководитель; у директора только он сам; HR и backstopper не получают | планировщик, либо сразу при позднем одобрении |
 
-Тему и текст письма формирует модуль `mail` при постановке в очередь и сохраняет в `subject` и `body` (формулировки в RULES не заданы, определяет S4). Отмена, отзыв, смена даты выхода, письма backstopper и HR об отменах и переносах — **писем не порождают** (§8-7, §8-8). Ключ `(type, vacationId, recipientId)` даёт одно письмо на сочетание (§8-3).
+Тему и текст письма формирует модуль `mail` при постановке в очередь и сохраняет в `subject` и `body` (формулировки в RULES не заданы, определены в S4, [mail-templates.ts](apps/api/src/mail/mail-templates.ts)). Ссылок в письмах нет.
+
+| Письмо | Тема | Текст (строки) |
+|---|---|---|
+| `NEW_REQUEST` | `Новая заявка на отпуск: {ФИО}, {start}–{end}` | `{ФИО} подал(а) заявку на отпуск с {start} по {end}.` / `Рабочих дней: {N}. Заменяющий: {ФИО backstopper}.` / `Комментарий: {comment}` (только если есть) |
+| `NEW_REQUEST` директора (получатель HR) | `Допуск HR: новая заявка на отпуск, {ФИО}, {start}–{end}` | те же строки и последней `Заявку директора подтверждает HR.` |
+
+Даты в письмах ISO `YYYY-MM-DD`. Письма `DECISION` (S5) и `REMINDER` (S7) описываются в своих этапах. Отмена, отзыв, смена даты выхода, письма backstopper и HR об отменах и переносах — **писем не порождают** (§8-7, §8-8). Ключ `(type, vacationId, recipientId)` даёт одно письмо на сочетание (§8-3).
 
 ### Проход планировщика (идемпотентный, по Clock)
 
@@ -1237,7 +1258,7 @@ pass():
 13. События SSE о смене даты выхода получают сотрудник, его руководитель и HR.
 14. Порядок проверок и «одна первая ошибка» при подаче, переносе и согласовании (раздел 8).
 15. Проход планировщика после `PUT /clock` выполняется синхронно, до ответа (детерминизм e2e).
-16. Тексты и темы писем определяет S4.
+16. Тексты и темы писем определяет S4 (`NEW_REQUEST` - [раздел 10](#10-планировщик-и-outbox)).
 
 ### Известные ограничения
 
