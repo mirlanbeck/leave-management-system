@@ -10,7 +10,10 @@ import {
   type CalendarDate,
   type LedgerAction,
 } from '../domain';
+import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+type LedgerDb = Pick<Prisma.TransactionClient, 'ledgerEntry'>;
 
 export interface BalanceView {
   employeeId: number;
@@ -39,9 +42,15 @@ export class BalanceService {
     return companyToday(await this.clock.now(), companyTz(this.env));
   }
 
-  /** Все списания и возвраты сотрудника, независимо от даты (RULES §6-6). */
-  async ledgerOf(employeeId: number): Promise<LedgerAction[]> {
-    const rows = await this.prisma.ledgerEntry.findMany({
+  /**
+   * Все списания и возвраты сотрудника, независимо от даты (RULES §6-6). `db` - клиент
+   * транзакции, если чтение идёт под блокировкой сотрудника (architecture §6).
+   */
+  async ledgerOf(
+    employeeId: number,
+    db: LedgerDb = this.prisma,
+  ): Promise<LedgerAction[]> {
+    const rows = await db.ledgerEntry.findMany({
       where: { vacation: { employeeId } },
       select: { kind: true, halfDays: true, occurredAt: true },
     });
@@ -51,10 +60,11 @@ export class BalanceService {
   async input(
     employee: Pick<AuthUser, 'id' | 'hireDate'>,
     today: CalendarDate,
+    db: LedgerDb = this.prisma,
   ): Promise<BalanceInput> {
     return {
       hireDate: employee.hireDate,
-      ledger: await this.ledgerOf(employee.id),
+      ledger: await this.ledgerOf(employee.id, db),
       today,
       tz: companyTz(this.env),
     };
