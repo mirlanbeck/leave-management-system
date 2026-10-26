@@ -6,8 +6,8 @@ import {
   companyDate,
   DEFAULT_TIME,
   formatCompanyMoment,
+  applyClock,
   loadStrip,
-  setClock,
   type StripData,
 } from './clock-logic';
 
@@ -41,17 +41,11 @@ export function DemoClockStrip() {
       </div>
     );
   }
-  return (
-    <ClockForm
-      companyTz={state.companyTz}
-      now={state.now}
-      onChange={(now) => setState({ ...state, now })}
-    />
-  );
+  return <ClockForm companyTz={state.companyTz} now={state.now} />;
 }
 
-function ClockForm(props: { companyTz: string; now: string; onChange: (now: string) => void }) {
-  const { companyTz, now, onChange } = props;
+function ClockForm(props: { companyTz: string; now: string }) {
+  const { companyTz, now } = props;
   const [date, setDate] = useState(() => companyDate(now, companyTz));
   const [time, setTime] = useState(DEFAULT_TIME);
   const [error, setError] = useState<ApiProblem | null>(null);
@@ -62,11 +56,10 @@ function ClockForm(props: { companyTz: string; now: string; onChange: (now: stri
     setBusy(true);
     setError(null);
     try {
-      const view = await setClock(api, date, time);
-      onChange(view.now);
+      // после установки страница перезагружается: данные на ней считаются по новым часам
+      await applyClock(api, date, time, () => window.location.reload());
     } catch (err) {
       setError(toProblem(err));
-    } finally {
       setBusy(false);
     }
   }

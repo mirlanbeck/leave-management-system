@@ -21,6 +21,45 @@ export interface ClockView {
   frozen: boolean;
 }
 
+/** GET /employees: справочник для выбора backstopper, без самого вошедшего. */
+export interface EmployeeRef {
+  id: number;
+  fullName: string;
+}
+
+/** GET /me/balance?on=: дни кратно 0,5, даты YYYY-MM-DD; «сегодня» по Clock сервера. */
+export interface Balance {
+  employeeId: number;
+  today: string;
+  balance: number;
+  on: string | null;
+  availableOn: number | null;
+}
+
+/** Тело POST /vacations. */
+export interface VacationInput {
+  startDate: string;
+  endDate: string;
+  backstopperId: number | null;
+  comment: string;
+}
+
+export type VacationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'REPLACED';
+
+/** Заявка (architecture §7, схема Vacation); поля, нужные интерфейсу. */
+export interface Vacation {
+  id: number;
+  employee: EmployeeRef;
+  backstopper: EmployeeRef;
+  startDate: string;
+  endDate: string;
+  workDays: number;
+  status: VacationStatus;
+  comment: string | null;
+  transferPending: boolean;
+  oldVacationKept: boolean;
+}
+
 export interface LoginResult {
   accessToken: string;
   expiresAt: string;

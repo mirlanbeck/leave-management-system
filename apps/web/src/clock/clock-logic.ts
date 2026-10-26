@@ -28,6 +28,21 @@ export function setClock(
   return client.put<ClockView>('/clock', { date, time });
 }
 
+/**
+ * Установка часов и перезагрузка страницы: остаток, «сегодня» и списки на любой странице
+ * запрашиваются заново по новым часам (RULES §9-3, §3-10; DECISIONS [S4]). При ошибке
+ * перезагрузки нет, ошибка показывается в полосе.
+ */
+export async function applyClock(
+  client: Pick<ApiClient, 'put'>,
+  date: string,
+  time: string,
+  reload: () => void,
+): Promise<void> {
+  await setClock(client, date, time);
+  reload();
+}
+
 type Parts = Record<'year' | 'month' | 'day' | 'hour' | 'minute', string>;
 
 /** Календарные части момента в поясе компании; время браузера не участвует, пояс задан явно. */

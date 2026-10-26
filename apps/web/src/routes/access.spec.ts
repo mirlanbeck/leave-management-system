@@ -9,20 +9,20 @@ const hr = { isHr: true, isManager: false };
 
 describe('таблица «роль → маршруты»', () => {
   // RULES §7-2
-  it('сотрудник видит только профиль', () => {
-    expect(allowedRoutes(employee)).toEqual(['home']);
+  it('сотрудник видит профиль и страницу «Отпуск»', () => {
+    expect(allowedRoutes(employee)).toEqual(['home', 'vacation']);
     expect(canAccess('approvals', employee)).toBe(false);
     expect(canAccess('hr', employee)).toBe(false);
   });
 
   // RULES §7-2
-  it('руководитель видит профиль и согласование, но не экран HR', () => {
-    expect(allowedRoutes(manager)).toEqual(['home', 'approvals']);
+  it('руководитель видит профиль, «Отпуск» и согласование, но не экран HR', () => {
+    expect(allowedRoutes(manager)).toEqual(['home', 'vacation', 'approvals']);
     expect(canAccess('hr', manager)).toBe(false);
   });
 
-  // RULES §7-2
+  // RULES §7-2; §7-1: у HR есть свои отпускные дни
   it('HR видит всё: заявки директора согласует HR', () => {
-    expect(allowedRoutes(hr)).toEqual(['home', 'approvals', 'hr']);
+    expect(allowedRoutes(hr)).toEqual(['home', 'vacation', 'approvals', 'hr']);
   });
 });
