@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import type { App } from 'supertest/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { HealthModule } from './health.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -22,7 +23,7 @@ describe('GET /health (integration, нужен Postgres: DATABASE_URL)', () => {
   it('200, когда БД доступна', async () => {
     const app = await createApp();
     try {
-      const res = await request(app.getHttpServer()).get('/health');
+      const res = await request(app.getHttpServer() as App).get('/health');
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ status: 'ok' });
     } finally {
@@ -34,7 +35,7 @@ describe('GET /health (integration, нужен Postgres: DATABASE_URL)', () => {
     const dead = new PrismaService('postgresql://x:x@127.0.0.1:1/x');
     const app = await createApp(dead);
     try {
-      const res = await request(app.getHttpServer()).get('/health');
+      const res = await request(app.getHttpServer() as App).get('/health');
       expect(res.status).toBe(503);
     } finally {
       await app.close();

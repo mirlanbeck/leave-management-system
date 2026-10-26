@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument -- тела ответов supertest имеют тип any */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument -- тела ответов supertest имеют тип any */
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';

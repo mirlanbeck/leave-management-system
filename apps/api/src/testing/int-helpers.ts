@@ -1,6 +1,7 @@
 // Общие помощники integration-тестов API (нужен Postgres).
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import type { App } from 'supertest/types';
 import { hashPassword } from '../auth/password';
 import { Db } from './test-db';
 
@@ -19,7 +20,7 @@ export async function loginAs(
   login: string,
   password: string = PASSWORD,
 ): Promise<string> {
-  const res = await request(app.getHttpServer())
+  const res = await request(app.getHttpServer() as App)
     .post('/auth/login')
     .send({ login, password });
   if (res.status !== 200) {

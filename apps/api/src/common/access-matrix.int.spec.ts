@@ -3,6 +3,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
+import type { App } from 'supertest/types';
 import {
   PASSWORD,
   bearer,
@@ -235,7 +236,7 @@ describe('матрица доступа (integration, нужен Postgres)', () 
       await setDbClock(pool, '2026-10-01T03:00:00Z');
       const app = row.demo ? apps.on : apps.off;
       const token = tokens[actor];
-      let req = request(app.getHttpServer())[row.method](row.path);
+      let req = request(app.getHttpServer() as App)[row.method](row.path);
       if (token) req = req.set(bearer(token));
       const res = await (row.body ? req.send(row.body) : req);
       expect(res.status).toBe(row.expected[actor]);
