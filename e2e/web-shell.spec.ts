@@ -1,23 +1,10 @@
 import { createHmac } from 'node:crypto';
-import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
+import { loginAs, signIn } from './helpers';
 
-const PASSWORD = 'demo1234';
 const TOKEN_KEY = 'leave.accessToken';
 // Демо-секрет из docker-compose (только для демо); токен подписывается им же, как в API.
 const JWT_SECRET = process.env.JWT_SECRET ?? 'demo-only-not-for-production';
-
-async function signIn(page: Page, login: string, password = PASSWORD) {
-  await page.getByLabel('Логин').fill(login);
-  await page.getByLabel('Пароль').fill(password);
-  await page.getByRole('button', { name: 'Войти' }).click();
-}
-
-async function loginAs(page: Page, login: string) {
-  await page.goto('/login');
-  await signIn(page, login);
-  await expect(page.getByTestId('current-user')).toBeVisible();
-}
 
 function b64url(value: object): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
