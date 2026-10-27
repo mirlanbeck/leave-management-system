@@ -138,3 +138,4 @@
 
 2026-10-28 00:02 | [S5] Ключевой промпт: «lint для web: @eslint/js, typescript-eslint, eslint-plugin-react-hooks (rules-of-hooks, exhaustive-deps); находки, меняющие поведение, не править, а выписать». Пользователь попросил перепроверить план: агент отказался от пресета react-hooks recommended (правила React Compiler дали бы находки со сменой поведения). Пользователь выбрал набор без проверки типов и заменил warn на точечное подавление, чтобы правило оставалось error для нового кода. По npm audit Пользователь решил: nodemailer отдельным PR, multer отложить до S9, audit в CI не вводить.
 
+2026-10-28 00:36 [S5] Ключевой промпт: «обновить nodemailer 10.0.16 → 10.1.4, проверить changelog на createTransport/sendMail и типы, в lock-файле только nodemailer, код api не менять». Агент нашёл в changelog 10.1.0 изменение семантики greetingTimeout (SMTP_SEND_MAX_MS остаётся верхней оценкой) и нестабильный config.spec.ts. 
