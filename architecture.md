@@ -315,7 +315,7 @@ approverOf(employee) = employee.managerId != null ? manager(employee) : HR
 
 - Заявка сотрудника, руководителя, заместителя и HR: непосредственный руководитель (заявки HR согласует заместитель директора).
 - Заявка директора: HR («допуск HR»). То же для заявки-переноса.
-- Действие согласующего выполняет только `approverOf(vacation.employee)`. Если согласующий совпадает с автором заявки (HR вызывает решение по своей заявке), ответ `403 APPROVE_OWN_REQUEST`; для любого другого пользователя `403 NOT_APPROVER`.
+- Действие согласующего выполняет только `approverOf(vacation.employee)` и никогда сам автор заявки (`canDecide`, [policy.ts](apps/api/src/org/policy.ts)). Автор, вызвавший решение по своей заявке, получает `403 APPROVE_OWN_REQUEST` при любой роли (руководитель, заместитель, HR); любой другой пользователь, которому заявка видна, — `403 NOT_APPROVER`; кому не видна — `404` (DECISIONS [S5]).
 - Письмо о новой заявке уходит `approverOf(employee)`; письмо о решении — `employee` (§8-2).
 
 ### Предупреждение о пересечениях (RULES §4-6; DECISIONS 2026-10-22)
@@ -406,7 +406,7 @@ canSee(viewer, employeeId) = employeeId ∈ scope(viewer)
 | `GET /clock`, `PUT /clock` | любой вошедший, **только при `DEMO_MODE`**, иначе `404` | §9-2, §9-3 | S3 |
 | `GET /employees` | любой | §3-3 | S4 |
 | `GET /me/balance` | любой | §3-10, §7-2 | S4 |
-| `GET /employees/{id}/balance` | руководитель (подчинённые), HR (все) | §7-2 | S5 |
+| `GET /employees/{id}/balance` | руководитель (подчинённые), HR (все) | §7-2 | не используется (DECISIONS 2026-10-28 00:58) |
 | `POST /vacations` | любой, у кого уже есть начисление | §3, §10-1 | S4 |
 | `GET /vacations` | любой (`mine`); руководитель (`team`); HR (`all`) | §7-2 | S4 |
 | `GET /vacations/{id}` | видимость `canSee` | §7-2 | S4 |
@@ -558,6 +558,7 @@ paths:
               schema: { $ref: "#/components/schemas/Balance" }
   /employees/{id}/balance:
     get:
+      deprecated: true   # не реализован: потребителя нет, остатки дают ApprovalItem и Calendar (DECISIONS 2026-10-28 00:58)
       tags: [balance]
       summary: Остаток сотрудника (руководитель - подчинённые, HR - все)
       parameters:
@@ -985,7 +986,9 @@ components:
 - `POST /vacations` (S4): поля тела только `startDate`, `endDate`, `backstopperId`, `comment`; любое другое (в том числе `workDays`, `employeeId`, `status`) даёт `400 VALIDATION_FAILED`. Неверные обе даты попадают в `details.fields` вместе. `workDays` считает сервер. Комментарий хранится обрезанным по краям, пустой - `null`. `createdAt` заявки и письма - один момент Clock на запрос. Проверки, заявка и письмо `NEW_REQUEST` - в одной транзакции под `User ... FOR NO KEY UPDATE` ([раздел 6](#6-политика-блокировок)); проверки в одном месте, `evaluateSubmission` ([vacation-rules.ts](apps/api/src/vacations/vacation-rules.ts)).
 - `POST /vacations/{id}/transfer` принимает те же поля, что подача; `backstopperId` обязателен (форма подставляет прежнего). `workDays` рассчитывается сервером, не принимается от клиента.
 - Одноразовое сообщение HR «Дата изменена. Проверьте одобренные отпуска этого сотрудника» формирует интерфейс; сервер его не хранит (RULES §6-3).
-- `actions` — подсказка для показа кнопок, не источник прав.
+- `actions` — подсказка для показа кнопок, не источник прав. С S5: `approve`, `reject` у согласующего, пока заявка `PENDING` (автору не показываются); `cancel`, `transfer`, `recall` — S6.
+- `GET /approvals` (S5): руководитель видит `PENDING` своих прямых подчинённых, HR — заявки директора; без подчинённых и не HR — `403 FORBIDDEN`. Порядок по `id`, старые сверху. `availableOnStart` считает тот же `BalanceService`, что `/me/balance?on=` и проверка при согласовании; `blockReason` совпадает с телом ответа `approve` при нехватке дней.
+- `POST /vacations/{id}/approve|reject` (S5): ответ `200`. Тело необязательно, в нём только `comment`; любое другое поле даёт `400 VALIDATION_FAILED`. Комментарий хранится обрезанным по краям, пустой - `null` (`decisionComment`). `decidedAt` и момент списания - один момент Clock на запрос. Заявка читается без блокировки (для `employeeId`), затем `User` → `Vacation` `FOR NO KEY UPDATE`, статус и остаток перечитываются ([раздел 6](#6-политика-блокировок)). Нарушение `LedgerEntry_one_debit_per_vacation_idx` даёт `409 ALREADY_PROCESSED`. Событие `vacation.approved` публикуется после коммита; сбой подписчика пишется в лог и не меняет ответ.
 
 ---
 
@@ -1076,7 +1079,7 @@ components:
 
 - **Подача:** `VALIDATION_FAILED` → `BACKSTOPPER_REQUIRED` → `BACKSTOPPER_IS_SELF` → `BACKSTOPPER_NOT_FOUND` → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `NO_ACCRUAL_YET` → `VACATION_BEFORE_HIRE` → `PAST_START_YEAR` → `PAST_COMMENT_REQUIRED` → `VACATION_OVERLAP` → `INSUFFICIENT_BALANCE`.
 - **Перенос:** состояние исходного отпуска (`TRANSFER_SOURCE_NOT_APPROVED`, `TRANSFER_ALREADY_PENDING`, `TRANSFER_STARTED`) → `VALIDATION_FAILED` → проверки backstopper → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `TRANSFER_START_IN_PAST` → `TRANSFER_WORKDAYS_MISMATCH` → `VACATION_OVERLAP`. Проверки `NO_ACCRUAL_YET`, `VACATION_BEFORE_HIRE` (§3-12), `PAST_*` и `INSUFFICIENT_BALANCE` к переносу не применяются (остаток не проверяется, перенос в прошлое запрещён отдельным правилом, §5-2).
-- **Согласование:** `NOT_FOUND` → `NOT_APPROVER`/`APPROVE_OWN_REQUEST` → `ALREADY_PROCESSED` → `TRANSFER_APPROVE_AFTER_START` или `APPROVE_INSUFFICIENT_BALANCE`.
+- **Согласование:** `NOT_FOUND` (невидимая, несуществующая, некорректный id) → `APPROVE_OWN_REQUEST` (автор) → `NOT_APPROVER` → `ALREADY_PROCESSED` → `TRANSFER_APPROVE_AFTER_START` или `APPROVE_INSUFFICIENT_BALANCE`. Текст `APPROVE_INSUFFICIENT_BALANCE` оформлен как `INSUFFICIENT_BALANCE`: дни через запятую, минус типографский, в `details.available` и `details.requested` числа (DECISIONS 2026-10-26 10:47).
 
 ### Соответствие ограничениям БД
 
@@ -1271,6 +1274,10 @@ pass():
 15. Проход планировщика после `PUT /clock` выполняется синхронно, до ответа (детерминизм e2e).
 16. Тексты и темы писем определяет S4 (`NEW_REQUEST` - [раздел 10](#10-планировщик-и-outbox)).
 17. Диспетчер outbox: пачка 10 писем, пауза с удвоением до `OUTBOX_RETRY_MAX_MS`, остановка прохода на первом сбое, `clock_timestamp()` для `sentAt` и `nextAttemptAt`, проверка «сегодня ≥ даты начала» для напоминания по Clock ([раздел 10](#10-планировщик-и-outbox)).
+18. Свою заявку не согласует никто: `APPROVE_OWN_REQUEST` для автора при любой роли, раньше `NOT_APPROVER` (S5, раздел 5).
+19. `GET /approvals` только руководителю и HR, порядок по `id`; тело решения - только `comment` (S5, раздел 7).
+20. Второе списание по заявке, пойманное уникальным индексом, отвечает `409 ALREADY_PROCESSED`, а не `500` (S5, разделы 6 и 8).
+21. Шина событий: исключение подписчика пишется в лог и не меняет ответ API (S5, раздел 4).
 
 ### Известные ограничения
 
