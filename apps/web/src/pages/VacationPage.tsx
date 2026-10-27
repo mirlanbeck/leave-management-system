@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { BalancePanel } from '../vacation/BalancePanel';
 import { nextOnDate } from '../vacation/balance-logic';
+import { MyRequests } from '../vacation/MyRequests';
 import type { VacationFormValues } from '../vacation/submit-logic';
 import { EMPTY_FORM, VacationForm } from '../vacation/VacationForm';
 
-/** Страница «Отпуск»: остаток и форма заявки (RULES §3; DECISIONS 2026-10-26 00:43). */
+/** Страница «Отпуск»: остаток, форма заявки и «Мои заявки» (RULES §3; DECISIONS 2026-10-26 00:43). */
 export function VacationPage() {
   const [form, setForm] = useState<VacationFormValues>(EMPTY_FORM);
   const [on, setOn] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   function changeForm(next: VacationFormValues) {
     // дата панели по умолчанию из начала заявки (RULES §3-10)
@@ -15,11 +17,17 @@ export function VacationPage() {
     setForm(next);
   }
 
+  function submitted() {
+    setForm(EMPTY_FORM);
+    setReloadKey((k) => k + 1); // «Мои заявки» перечитываются после подачи
+  }
+
   return (
     <section>
       <h1>Отпуск</h1>
       <BalancePanel on={on} onChangeOn={setOn} />
-      <VacationForm values={form} onChange={changeForm} onSubmitted={() => setForm(EMPTY_FORM)} />
+      <VacationForm values={form} onChange={changeForm} onSubmitted={submitted} />
+      <MyRequests reloadKey={reloadKey} />
     </section>
   );
 }
