@@ -130,3 +130,13 @@ dd {
 .negative {
   color: #b42318;
 }
+/* «Мои заявки» */
+.requests {
+  border-collapse: collapse;
+}
+.requests th,
+.requests td {
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  text-align: left;
+  border-bottom: 1px solid #d9dde3;
+}
