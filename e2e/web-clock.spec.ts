@@ -1,15 +1,5 @@
-import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
-
-const PASSWORD = 'demo1234';
-
-async function loginAs(page: Page, login: string) {
-  await page.goto('/login');
-  await page.getByLabel('Логин').fill(login);
-  await page.getByLabel('Пароль').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(page.getByTestId('current-user')).toBeVisible();
-}
+import { loginAs } from './helpers';
 
 test.describe('S3-d: полоса демо-часов', () => {
   // RULES §9-2, §9-3
