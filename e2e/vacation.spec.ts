@@ -1,23 +1,10 @@
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
+import { loginAs, openFromNav, waitForSettledInbox } from './helpers';
 
 // Страница «Отпуск»: остаток, подача заявки, «Мои заявки» (S4-c, issue #39).
 // e2e:reset ставит часы на 2026-10-21 09:00 по Бишкеку; ожидаемые числа сверены с API.
-const PASSWORD = 'demo1234';
-const MAILPIT_URL = process.env.MAILPIT_URL ?? 'http://127.0.0.1:8025';
-
-async function loginAs(page: Page, login: string) {
-  await page.goto('/login');
-  await page.getByLabel('Логин').fill(login);
-  await page.getByLabel('Пароль').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(page.getByTestId('current-user')).toBeVisible();
-}
-
-async function openVacation(page: Page) {
-  await page.getByRole('link', { name: 'Отпуск' }).click();
-  await expect(page.getByRole('heading', { name: 'Отпуск', level: 1 })).toBeVisible();
-}
+const openVacation = (page: Page) => openFromNav(page, 'Отпуск');
 
 async function fillRequest(page: Page, start: string, end: string, backstopper: string) {
   await page.getByLabel('Начало').fill(start);
@@ -27,12 +14,6 @@ async function fillRequest(page: Page, start: string, end: string, backstopper: 
 
 const submitButton = (page: Page) => page.getByRole('button', { name: 'Подать' });
 const rows = (page: Page) => page.getByTestId('my-request-row');
-
-async function inboxCount(request: APIRequestContext): Promise<number> {
-  const res = await request.get(`${MAILPIT_URL}/api/v1/messages`);
-  expect(res.ok()).toBe(true);
-  return ((await res.json()) as { messages: unknown[] }).messages.length;
-}
 
 test.describe('S4-c: страница «Отпуск»', () => {
   // RULES §3-10, §2-5
@@ -115,9 +96,7 @@ test.describe('S4-c: страница «Отпуск»', () => {
     await expect(page.getByTestId('submit-error')).toHaveCount(0);
     expect(posts).toBe(1);
 
-    await expect.poll(() => inboxCount(request), { timeout: 20_000 }).toBeGreaterThan(0);
-    await new Promise((r) => setTimeout(r, 5_000)); // больше двух интервалов опроса диспетчера
-    expect(await inboxCount(request)).toBe(1);
+    expect(await waitForSettledInbox(request)).toHaveLength(1);
   });
 });
 
