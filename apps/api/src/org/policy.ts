@@ -32,6 +32,18 @@ export function approverOf(
   return employee.managerId ?? hrId;
 }
 
+/**
+ * Может ли `actorId` подтвердить или отклонить заявку сотрудника (RULES §4-1, §4-2): только
+ * согласующий и никогда сам автор (DECISIONS [S5]). Причину отказа различает approvals.
+ */
+export function canDecide(
+  actorId: number,
+  employee: Pick<OrgUser, 'id' | 'managerId'>,
+  hrId: number,
+): boolean {
+  return actorId !== employee.id && approverOf(employee, hrId) === actorId;
+}
+
 /** Кого видит зритель: 'ALL' (HR) или набор id (он сам и прямые подчинённые). */
 export type Scope = 'ALL' | Set<number>;
 

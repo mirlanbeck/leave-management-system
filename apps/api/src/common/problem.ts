@@ -39,6 +39,10 @@ export const MESSAGES = {
   FORBIDDEN: 'Недостаточно прав для этого действия',
   NOT_FOUND: 'Не найдено',
   VALIDATION_FAILED: 'Некорректные данные запроса',
+  // Согласование (architecture §8)
+  ALREADY_PROCESSED: 'Заявка уже обработана',
+  NOT_APPROVER: 'Эту заявку согласует другой сотрудник',
+  APPROVE_OWN_REQUEST: 'Свою заявку согласовать нельзя',
 } as const;
 
 export const INTERNAL_ERROR_MESSAGE = 'Внутренняя ошибка сервера';
