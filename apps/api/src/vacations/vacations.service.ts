@@ -145,7 +145,10 @@ export class VacationsService {
         ],
         now,
       );
-      return toVacationView(created);
+      return toVacationView(created, {
+        id: user.id,
+        hrId: await this.org.hrId(tx),
+      });
     });
   }
 
@@ -163,7 +166,8 @@ export class VacationsService {
       include: VACATION_INCLUDE,
       orderBy: { id: 'desc' },
     });
-    return rows.map(toVacationView);
+    const v = { id: viewer.id, hrId: await this.org.hrId() };
+    return rows.map((row) => toVacationView(row, v));
   }
 
   /** Невидимая заявка отвечает так же, как несуществующая: 404 (architecture §5). */
@@ -175,7 +179,10 @@ export class VacationsService {
     if (!row || !(await this.org.canSee(viewer, row.employeeId))) {
       throw notFound();
     }
-    return toVacationView(row);
+    return toVacationView(row, {
+      id: viewer.id,
+      hrId: await this.org.hrId(),
+    });
   }
 
   private async employeesFilter(

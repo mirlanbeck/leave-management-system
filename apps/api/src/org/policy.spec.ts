@@ -1,5 +1,12 @@
 import fc from 'fast-check';
-import { approverOf, canSee, rolesOf, scope, type OrgUser } from './policy';
+import {
+  approverOf,
+  canDecide,
+  canSee,
+  rolesOf,
+  scope,
+  type OrgUser,
+} from './policy';
 
 // Структура RULES §7: директор <- зам <- (HR, Р1, Р2); Р1 <- С1; Р2 <- С2
 const users: OrgUser[] = [
@@ -107,5 +114,32 @@ describe('approverOf', () => {
   // RULES §4-2: заявки директора (начальника нет) подтверждает HR («допуск HR»)
   it('директор -> HR', () => {
     expect(approverOf(byId(1), HR_ID)).toBe(HR_ID);
+  });
+});
+
+describe('canDecide', () => {
+  const HR_ID = 3;
+
+  // RULES §4-1, §4-2: решает только согласующий
+  it.each([
+    [4, 6, true], // Р1 по заявке С1
+    [3, 1, true], // HR по заявке директора
+    [2, 3, true], // заместитель по заявке HR
+    [3, 6, false], // HR по заявке С1
+    [2, 6, false], // заместитель по заявке С1 (не непосредственный)
+    [5, 6, false], // Р2 по заявке С1
+  ])('%i по заявке %i -> %s', (actorId, employeeId, expected) => {
+    expect(canDecide(actorId, byId(employeeId), HR_ID)).toBe(expected);
+  });
+
+  // RULES §4-2; DECISIONS [S5]: свою заявку не решает никто
+  // включая вырожденный случай: автор сам оказался бы согласующим (директор и HR в одном лице)
+  it('автор по своей заявке -> false, даже если он же согласующий', () => {
+    fc.assert(
+      fc.property(fc.constantFrom(...users), fc.boolean(), (u, selfHr) => {
+        const employee = selfHr ? { ...u, managerId: null } : u;
+        return !canDecide(u.id, employee, selfHr ? u.id : HR_ID);
+      }),
+    );
   });
 });

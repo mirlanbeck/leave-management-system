@@ -59,18 +59,26 @@ export class OrgService {
     employee: Pick<AuthUser, 'managerId'>,
     db: Pick<Prisma.TransactionClient, 'user'> = this.prisma,
   ): Promise<EmployeeRef> {
+    const hrId = await this.hrId(db);
+    if (employee.managerId === null && hrId === -1) {
+      throw new Error('в системе нет HR: согласующего директора нет');
+    }
+    return db.user.findUniqueOrThrow({
+      where: { id: approverOf(employee, hrId) },
+      select: { id: true, fullName: true },
+    });
+  }
+
+  /** id HR (инвариант «HR один» держит seed); -1, если HR нет: такого id не бывает. */
+  async hrId(
+    db: Pick<Prisma.TransactionClient, 'user'> = this.prisma,
+  ): Promise<number> {
     const hr = await db.user.findFirst({
       where: { isHr: true },
       select: { id: true },
       orderBy: { id: 'asc' },
     });
-    if (employee.managerId === null && !hr) {
-      throw new Error('в системе нет HR: согласующего директора нет');
-    }
-    return db.user.findUniqueOrThrow({
-      where: { id: approverOf(employee, hr?.id ?? -1) },
-      select: { id: true, fullName: true },
-    });
+    return hr?.id ?? -1;
   }
 
   async profile(user: AuthUser): Promise<Profile> {

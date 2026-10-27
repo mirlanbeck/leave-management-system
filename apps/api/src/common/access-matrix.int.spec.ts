@@ -1,5 +1,5 @@
 // Матрица доступа: маршрут x роль -> ожидаемый статус. Этапы S4-S8 дописывают сюда строки
-// (RULES §7-2). Здесь строки S3 и S4.
+// (RULES §7-2). Здесь строки S3, S4 и S5.
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
@@ -15,6 +15,7 @@ import { createTestApp } from '../testing/test-app';
 import {
   RulesOrgKey,
   createPool,
+  insertVacation,
   seedRulesOrg,
   truncateAll,
 } from '../testing/test-db';
@@ -51,6 +52,8 @@ interface Row {
   demo: boolean;
   expected: Record<Actor, number>;
   rules: string;
+  /** Заявка employee1 в PENDING (id 1 после RESTART IDENTITY) до запроса. */
+  pendingVacation?: boolean;
 }
 
 const CLOCK_BODY = { date: '2026-10-02', time: '09:00' };
@@ -169,6 +172,40 @@ const ROWS: Row[] = [
     rules: '§3-6, §10-1',
   },
   {
+    // согласующий - руководитель или HR (RULES §4-7); HR видит здесь заявки директора
+    method: 'get',
+    path: '/approvals',
+    demo: true,
+    expected: {
+      director: 200,
+      deputy: 200,
+      hr: 200,
+      manager1: 200,
+      employee1: 403,
+      preHire: 403,
+      anon: 401,
+    },
+    rules: '§4-7',
+  },
+  ...(['approve', 'reject'] as const).map((decision): Row => ({
+    // решает только согласующий; автор - 403 APPROVE_OWN_REQUEST, HR - 403 NOT_APPROVER,
+    // кому заявка не видна - 404 (RULES §4-1, §4-2, §7-2)
+    method: 'post',
+    path: `/vacations/1/${decision}`,
+    demo: true,
+    pendingVacation: true,
+    expected: {
+      director: 404,
+      deputy: 404,
+      hr: 403,
+      manager1: 200,
+      employee1: 403,
+      preHire: 404,
+      anon: 401,
+    },
+    rules: '§4-1, §4-2, §7-2',
+  })),
+  {
     method: 'get',
     path: '/config',
     demo: true,
@@ -196,6 +233,7 @@ describe('матрица доступа (integration, нужен Postgres)', () 
   let pool: Pool;
   let apps: { on: INestApplication; off: INestApplication };
   let tokens: Partial<Record<Actor, string>>;
+  let ids: Record<RulesOrgKey, number>;
 
   beforeAll(async () => {
     pool = createPool();
@@ -209,7 +247,7 @@ describe('матрица доступа (integration, нужен Postgres)', () 
     await truncateAll(pool);
     // 2026-10-01: сотрудник 3 (дата выхода 2026-10-12) ещё не вышел, но признак доступа у него есть
     await setDbClock(pool, '2026-10-01T03:00:00Z');
-    await seedRulesOrg(pool, await passwordHash());
+    ids = await seedRulesOrg(pool, await passwordHash());
     const key: Record<Exclude<Actor, 'anon'>, RulesOrgKey> = {
       director: 'director',
       deputy: 'deputy',
@@ -234,6 +272,14 @@ describe('матрица доступа (integration, нужен Postgres)', () 
     // RULES §7-2, §6-5
     it.each(ACTORS)('%s', async (actor) => {
       await setDbClock(pool, '2026-10-01T03:00:00Z');
+      if (row.pendingVacation) {
+        await insertVacation(pool, {
+          employeeId: ids.employee1,
+          backstopperId: ids.manager2,
+          start: '2026-11-02',
+          end: '2026-11-06',
+        });
+      }
       const app = row.demo ? apps.on : apps.off;
       const token = tokens[actor];
       let req = request(app.getHttpServer() as App)[row.method](row.path);

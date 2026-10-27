@@ -70,6 +70,19 @@ export class BalanceService {
     };
   }
 
+  /**
+   * «Доступно на дату `on`» в днях (RULES §3-10): тот же расчёт, что у `/me/balance` и подачи.
+   * Экран согласования и повторная проверка при согласовании (RULES §4-3) идут через него.
+   */
+  async availableOnDays(
+    employee: Pick<AuthUser, 'id' | 'hireDate'>,
+    today: CalendarDate,
+    on: CalendarDate,
+    db: LedgerDb = this.prisma,
+  ): Promise<number> {
+    return availableOn(await this.input(employee, today, db), on) / 2;
+  }
+
   /** Остаток на сегодня и, если задана дата `on` (уже проверенная), «доступно на дату». */
   async view(
     employee: Pick<AuthUser, 'id' | 'hireDate'>,
