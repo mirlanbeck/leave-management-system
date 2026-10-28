@@ -413,8 +413,8 @@ canSee(viewer, employeeId) = employeeId ∈ scope(viewer)
 | `GET /vacations/{id}` | видимость `canSee` | §7-2 | S4 |
 | `GET /approvals` | руководитель, HR | §4-7 | S5 |
 | `POST /vacations/{id}/approve`, `.../reject` | согласующий | §4-1, §4-2 | S5 |
-| `POST /vacations/{id}/cancel` | владелец, до начала | §5-4, §5-7 | S6 |
-| `POST /vacations/{id}/recall` | HR, после начала | §5-5 | S6 |
+| `POST /vacations/{id}/cancel` | владелец (в том числе HR над своим), до начала | §5-4, §5-7, §5-10 | S6a |
+| `POST /vacations/{id}/recall` | HR (в том числе над своим), пока отпуск идёт | §5-5, §5-11 | S6a |
 | `POST /vacations/{id}/transfer` | владелец, до начала | §5-1, §5-2 | S6 |
 | `GET /hr/balances` | HR | §7-2 | S6 |
 | `PATCH /employees/{id}/hire-date` | HR | §6-1 | S6 |
@@ -635,15 +635,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Vacation" }
-        "403": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED: тело пустое, любое поле - ошибка
+        "403": { $ref: "#/components/responses/Problem" }   # FORBIDDEN, CANCEL_STARTED_BY_EMPLOYEE
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }   # ALREADY_PROCESSED, PENDING_TRANSFER_BLOCKS
-        "422": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }   # CANCEL_PENDING_AFTER_START
   /vacations/{id}/recall:
     post:
       tags: [hr]
-      summary: Отзыв из начавшегося отпуска (HR)
-      description: Единственное действие HR над отпуском; письма нет; возвращаются рабочие дни с даты выхода по конец отпуска.
+      summary: Отзыв из идущего отпуска (HR, в том числе из своего)
+      description: Единственное действие HR над отпуском; только пока начало ≤ сегодня ≤ окончание; письма нет; возвращаются рабочие дни с даты выхода по конец отпуска.
       parameters:
         - { $ref: "#/components/parameters/Id" }
       requestBody:
@@ -661,10 +662,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Vacation" }
-        "403": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED: нет returnDate, неверная дата, лишнее поле
+        "403": { $ref: "#/components/responses/Problem" }   # FORBIDDEN (не HR)
         "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }   # ALREADY_PROCESSED, PENDING_TRANSFER_BLOCKS
+        "422": { $ref: "#/components/responses/Problem" }   # RECALL_NOT_APPROVED, RECALL_NOT_STARTED, RECALL_FINISHED, RECALL_DATE_OUT_OF_RANGE
   /vacations/{id}/transfer:
     post:
       tags: [vacations]
@@ -988,7 +990,8 @@ components:
 - `POST /vacations` (S4): поля тела только `startDate`, `endDate`, `backstopperId`, `comment`; любое другое (в том числе `workDays`, `employeeId`, `status`) даёт `400 VALIDATION_FAILED`. Неверные обе даты попадают в `details.fields` вместе. `workDays` считает сервер. Комментарий хранится обрезанным по краям, пустой - `null`. `createdAt` заявки и письма - один момент Clock на запрос. Проверки, заявка и письмо `NEW_REQUEST` - в одной транзакции под `User ... FOR NO KEY UPDATE` ([раздел 6](#6-политика-блокировок)); проверки в одном месте, `evaluateSubmission` ([vacation-rules.ts](apps/api/src/vacations/vacation-rules.ts)).
 - `POST /vacations/{id}/transfer` принимает те же поля, что подача; `backstopperId` обязателен (форма подставляет прежнего). `workDays` рассчитывается сервером, не принимается от клиента.
 - Одноразовое сообщение HR «Дата изменена. Проверьте одобренные отпуска этого сотрудника» формирует интерфейс; сервер его не хранит (RULES §6-3).
-- `actions` — подсказка для показа кнопок, не источник прав. С S5: `approve`, `reject` у согласующего, пока заявка `PENDING` (автору не показываются); `cancel`, `transfer`, `recall` — S6.
+- `actions` — подсказка для показа кнопок, не источник прав. С S5: `approve`, `reject` у согласующего, пока заявка `PENDING` (автору не показываются). С S6a: `cancel` у владельца, пока заявка `PENDING` или `APPROVED` и сегодня < даты начала; `recall` у HR, пока отпуск `APPROVED` и начало ≤ сегодня ≤ окончание (в том числе над своим). Подсказку дают те же функции, что проверки сервера ([cancel-rules.ts](apps/api/src/vacations/cancel-rules.ts)). `transfer` — S6b.
+- `POST /vacations/{id}/cancel` и `.../recall` (S6a): ответ `200` и заявка `CANCELLED` с `cancelledAt` (Clock) и, у отзыва, `returnDate`. Тело отмены пустое; тело отзыва — только `returnDate` (формат даты как у подачи). Заявка читается без блокировки (для `employeeId`), цепочка до корня по `replacesId` тоже; затем `User` → звенья по возрастанию id `FOR NO KEY UPDATE`, статус перечитывается ([раздел 6](#6-политика-блокировок)). У `APPROVED` — `REFUND` к списанию корня (`occurredAt` = Clock): при отмене `workDays·2`, при отзыве рабочие дни от `returnDate` до `endDate` (может быть 0); у `PENDING` возврата нет. Нарушение `LedgerEntry_one_refund_per_vacation_idx` даёт `409 ALREADY_PROCESSED`. Писем нет (§8-8). Событие `vacation.cancelled` (`by: EMPLOYEE` или `HR_RECALL`) — после коммита и только при отмене `APPROVED`.
 - `GET /approvals` (S5): руководитель видит `PENDING` своих прямых подчинённых, HR — заявки директора; без подчинённых и не HR — `403 FORBIDDEN`. Порядок по `id`, старые сверху. `availableOnStart` считает тот же `BalanceService`, что `/me/balance?on=` и проверка при согласовании; `blockReason` совпадает с телом ответа `approve` при нехватке дней.
 - `POST /vacations/{id}/approve|reject` (S5): ответ `200`. Тело необязательно, в нём только `comment`; любое другое поле даёт `400 VALIDATION_FAILED`. Комментарий хранится обрезанным по краям, пустой - `null` (`decisionComment`). `decidedAt` и момент списания - один момент Clock на запрос. Заявка читается без блокировки (для `employeeId`), затем `User` → `Vacation` `FOR NO KEY UPDATE`, статус и остаток перечитываются ([раздел 6](#6-политика-блокировок)). Нарушение `LedgerEntry_one_debit_per_vacation_idx` даёт `409 ALREADY_PROCESSED`. Событие `vacation.approved` публикуется после коммита; сбой подписчика пишется в лог и не меняет ответ.
 - `GET /calendar` (S5-e): только `APPROVED` в пределах `scope` зрителя; отпуск попадает, если пересекается с `[from, to]`, даты отдаются полностью; порядок `startDate`, имя, `id`. `from` и `to` обязательны; неверная дата, `from > to` и лишние параметры (в том числе `employeeId`) дают `400 VALIDATION_FAILED`; длина диапазона не ограничена. `balances` есть только у зрителя с прямыми подчинёнными (тот же `BalanceService`, что `/me/balance`), у остальных поля нет. Обновление при перезагрузке или переходе, поток SSE — S8.
@@ -1066,10 +1069,11 @@ components:
 | `TRANSFER_WORKDAYS_MISMATCH` | 422 | Число рабочих дней должно совпадать: было {old}, в заявке {requested} | §5-2 |
 | `TRANSFER_START_IN_PAST` | 422 | Начало переноса не может быть раньше сегодняшней даты; для прошлых дат подайте обычную заявку | §5-2 |
 | `PENDING_TRANSFER_BLOCKS` | 409 | Пока перенос ждёт решения, отпуск нельзя отменить или отозвать: сначала отмените перенос | §5-2, §5-3 |
-| `CANCEL_STARTED_BY_EMPLOYEE` | 403 | Отпуск уже начался: отменить его может только HR | §5-7 |
+| `CANCEL_STARTED_BY_EMPLOYEE` | 403 | Отпуск уже начался: отменить его сами вы не можете | §5-7 (текст: DECISIONS 2026-10-28 15:46) |
 | `CANCEL_PENDING_AFTER_START` | 422 | Заявка ждёт решения, а отпуск уже должен был начаться: её нельзя отменить, согласующий одобрит или отклонит её | §5-10 |
 | `RECALL_NOT_STARTED` | 422 | Отпуск ещё не начался: до начала его отменяет только сотрудник | §5-4, §5-5 |
 | `RECALL_NOT_APPROVED` | 422 | Отозвать можно только одобренный отпуск | §5-5 |
+| `RECALL_FINISHED` | 422 | Отпуск уже закончился: отозвать из него нельзя | §5-5 (DECISIONS 2026-10-28 15:41) |
 | `RECALL_DATE_OUT_OF_RANGE` | 422 | Дата выхода должна быть между датой начала и датой окончания отпуска включительно | §5-11 |
 
 Повторное действие над заявкой, статус которой уже не допускает его (например, второй раз «Отменить», решение по `CANCELLED`/`REPLACED`), даёт `409 ALREADY_PROCESSED`. Двойной клик по «Подать» не создаёт вторую заявку: вторая получает `VACATION_OVERLAP` с первой, письмо одно (§10-1).
@@ -1082,6 +1086,8 @@ components:
 
 - **Подача:** `VALIDATION_FAILED` → `BACKSTOPPER_REQUIRED` → `BACKSTOPPER_IS_SELF` → `BACKSTOPPER_NOT_FOUND` → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `NO_ACCRUAL_YET` → `VACATION_BEFORE_HIRE` → `PAST_START_YEAR` → `PAST_COMMENT_REQUIRED` → `VACATION_OVERLAP` → `INSUFFICIENT_BALANCE`.
 - **Перенос:** состояние исходного отпуска (`TRANSFER_SOURCE_NOT_APPROVED`, `TRANSFER_ALREADY_PENDING`, `TRANSFER_STARTED`) → `VALIDATION_FAILED` → проверки backstopper → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `TRANSFER_START_IN_PAST` → `TRANSFER_WORKDAYS_MISMATCH` → `VACATION_OVERLAP`. Проверки `NO_ACCRUAL_YET`, `VACATION_BEFORE_HIRE` (§3-12), `PAST_*` и `INSUFFICIENT_BALANCE` к переносу не применяются (остаток не проверяется, перенос в прошлое запрещён отдельным правилом, §5-2).
+- **Отмена** (DECISIONS 2026-10-28 15:41): `VALIDATION_FAILED` → `NOT_FOUND` → `FORBIDDEN` (не владелец) → `ALREADY_PROCESSED` (статус не `PENDING` и не `APPROVED`) → `PENDING_TRANSFER_BLOCKS` (S6b) → `CANCEL_STARTED_BY_EMPLOYEE` (`APPROVED`, сегодня ≥ начала) или `CANCEL_PENDING_AFTER_START` (`PENDING`, сегодня ≥ начала).
+- **Отзыв** (DECISIONS 2026-10-28 15:41): `VALIDATION_FAILED` → `NOT_FOUND` → `FORBIDDEN` (не HR) → `ALREADY_PROCESSED` (`CANCELLED`, `REPLACED`) → `RECALL_NOT_APPROVED` (`PENDING`, `REJECTED`) → `RECALL_NOT_STARTED` → `RECALL_FINISHED` → `PENDING_TRANSFER_BLOCKS` (S6b) → `RECALL_DATE_OUT_OF_RANGE`.
 - **Согласование:** `NOT_FOUND` (невидимая, несуществующая, некорректный id) → `APPROVE_OWN_REQUEST` (автор) → `NOT_APPROVER` → `ALREADY_PROCESSED` → `TRANSFER_APPROVE_AFTER_START` или `APPROVE_INSUFFICIENT_BALANCE`. Текст `APPROVE_INSUFFICIENT_BALANCE` оформлен как `INSUFFICIENT_BALANCE`: дни через запятую, минус типографский, в `details.available` и `details.requested` числа (DECISIONS 2026-10-26 10:47).
 
 ### Соответствие ограничениям БД
@@ -1286,6 +1292,9 @@ pass():
 21. Шина событий: исключение подписчика пишется в лог и не меняет ответ API (S5, раздел 4).
 22. `seed:demo`: обычные сервисы без Nest, только при `DEMO_MODE`, сценарий узнаётся по метке в комментарии, пропуск сценария даёт код выхода 1 (S5, раздел 4).
 23. `GET /calendar`: отпуск по пересечению с `[from, to]` без обрезки дат, диапазон не ограничен, `balances` только руководителю, с именами подчинённых; календарь — отдельная страница для всех ролей, экран HR остаётся под S6 (S5-e, раздел 7).
+24. Порядок проверок отмены и отзыва; отзыв по `REJECTED` — `RECALL_NOT_APPROVED`, по `CANCELLED`/`REPLACED` — `ALREADY_PROCESSED`; код `RECALL_FINISHED` (S6a, раздел 8; DECISIONS 2026-10-28 15:41).
+25. Отмена и отзыв — одна транзакция: цепочка читается до блокировки, возврат к списанию корня даже без переносов, `occurredAt` и `cancelledAt` — один момент Clock (S6a, разделы 6 и 7).
+26. Экран HR `/hr` в S6a — «Все заявки» с отзывом в строке; «Отменить» в «Моих заявках» только на странице «Отпуск», раздел HR на «Согласовании» остаётся на чтение (S6a; DECISIONS 2026-10-28 15:41).
 
 ### Известные ограничения
 
@@ -1299,5 +1308,6 @@ pass():
 - Напоминания при позднем одобрении не создаются до S7.
 - События `seed:demo` публикуются в шину процесса seed, api их не получает. С S8 календари, открытые во время `seed:demo`, обновятся только после перезагрузки.
 - Отмена заявки-переноса, когда старый отпуск уже начался, не проработана: действует буквальный текст §5 (ROADMAP, N4).
+- Свой отпуск HR отзывает сам; передача этого права руководителю HR — «следующим заходом» (RULES §5-5, §11).
 - Откат демо-часов не пересчитывает журнал (§9-5).
 - Неизвестный маршрут без токена отвечает `404`, существующий `401`: по этому видны существующие маршруты. Контракт API открыт (этот документ), данных это не раскрывает; принято в S3, пересмотреть в аудите S9 (issue #2).

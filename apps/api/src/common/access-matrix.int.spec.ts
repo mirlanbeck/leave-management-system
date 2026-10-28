@@ -1,5 +1,5 @@
 // Матрица доступа: маршрут x роль -> ожидаемый статус. Этапы S4-S8 дописывают сюда строки
-// (RULES §7-2). Здесь строки S3, S4 и S5 (в том числе календарь S5-e).
+// (RULES §7-2). Здесь строки S3, S4, S5 (в том числе календарь S5-e) и S6-a (отмена, отзыв).
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
@@ -205,6 +205,44 @@ const ROWS: Row[] = [
     },
     rules: '§4-1, §4-2, §7-2',
   })),
+  {
+    // отменяет только владелец (заявка PENDING до начала); руководитель и HR видят, но 403;
+    // кому заявка не видна - 404 (RULES §5-4, §5-10, §7-2)
+    method: 'post',
+    path: '/vacations/1/cancel',
+    body: {},
+    demo: true,
+    pendingVacation: true,
+    expected: {
+      director: 404,
+      deputy: 404,
+      hr: 403,
+      manager1: 403,
+      employee1: 200,
+      preHire: 404,
+      anon: 401,
+    },
+    rules: '§5-4, §5-10, §7-2',
+  },
+  {
+    // отзывает только HR: заявка PENDING до начала - 422 RECALL_NOT_APPROVED; руководитель и
+    // владелец видят, но 403; кому не видна - 404 (RULES §5-5, §7-2)
+    method: 'post',
+    path: '/vacations/1/recall',
+    body: { returnDate: '2026-11-02' },
+    demo: true,
+    pendingVacation: true,
+    expected: {
+      director: 404,
+      deputy: 404,
+      hr: 422,
+      manager1: 403,
+      employee1: 403,
+      preHire: 404,
+      anon: 401,
+    },
+    rules: '§5-5, §7-2',
+  },
   {
     // календарь видит любой вошедший; кого он показывает, решает scope (RULES §7-2)
     method: 'get',

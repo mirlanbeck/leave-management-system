@@ -219,7 +219,7 @@ describe('чтение заявок: GET /vacations, GET /vacations/{id} (integr
         returnDate: null,
         transferPending: false,
         oldVacationKept: false,
-        actions: [],
+        actions: ['cancel'], // владелец до начала (RULES §5-4)
       });
     });
 

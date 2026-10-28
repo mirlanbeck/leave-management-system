@@ -196,3 +196,10 @@ dd {
 .calendar-entries {
   padding-left: 1.25rem;
 }
+/* Подтверждение отмены и форма отзыва в строке таблицы */
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 22rem;
+}

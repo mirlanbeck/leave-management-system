@@ -612,8 +612,9 @@ describe('согласование: GET /approvals, approve, reject (integration
   });
 
   describe('actions в списках заявок', () => {
-    // architecture §7: подсказка кнопок по зрителю; автору approve/reject не показываются
-    it('руководителю approve/reject у PENDING подчинённого, автору - нет', async () => {
+    // architecture §7: подсказка кнопок по зрителю; автору approve/reject не показываются,
+    // а до начала доступна отмена (RULES §5-4, S6-a)
+    it('руководителю approve/reject у PENDING подчинённого, автору - только cancel', async () => {
       await vacation('employee1');
       const auth = bearer(await token('manager1'));
       const team = await request(app.getHttpServer())
@@ -626,7 +627,7 @@ describe('согласование: GET /approvals, approve, reject (integration
       const mine = await request(app.getHttpServer())
         .get('/vacations?scope=mine')
         .set(own);
-      expect(mine.body[0].actions).toEqual([]);
+      expect(mine.body[0].actions).toEqual(['cancel']);
     });
   });
 
