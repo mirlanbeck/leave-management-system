@@ -12,7 +12,10 @@ import {
   transferLabel,
 } from './approval-logic';
 
-function item(over: Partial<ApprovalItem> = {}, actions: ApprovalItem['vacation']['actions'] = ['approve', 'reject']): ApprovalItem {
+function item(
+  over: Partial<ApprovalItem> = {},
+  actions: ApprovalItem['vacation']['actions'] = ['approve', 'reject'],
+): ApprovalItem {
   return {
     vacation: {
       id: 7,
@@ -46,12 +49,29 @@ describe('пересечения в команде', () => {
   // RULES §4-6: предупреждение называет сотрудников и даты одобренных отпусков
   it('одно и несколько пересечений: имена и даты через точку с запятой', () => {
     expect(
-      overlapText([{ vacationId: 1, employee: { id: 5, fullName: 'James Walker' }, startDate: '2026-11-09', endDate: '2026-11-13' }]),
+      overlapText([
+        {
+          vacationId: 1,
+          employee: { id: 5, fullName: 'James Walker' },
+          startDate: '2026-11-09',
+          endDate: '2026-11-13',
+        },
+      ]),
     ).toBe('Пересекается с одобренными отпусками: James Walker 09.11.2026–13.11.2026');
     expect(
       overlapText([
-        { vacationId: 1, employee: { id: 5, fullName: 'James Walker' }, startDate: '2026-11-09', endDate: '2026-11-13' },
-        { vacationId: 2, employee: { id: 3, fullName: 'Daniel Brooks' }, startDate: '2026-11-16', endDate: '2026-11-16' },
+        {
+          vacationId: 1,
+          employee: { id: 5, fullName: 'James Walker' },
+          startDate: '2026-11-09',
+          endDate: '2026-11-13',
+        },
+        {
+          vacationId: 2,
+          employee: { id: 3, fullName: 'Daniel Brooks' },
+          startDate: '2026-11-16',
+          endDate: '2026-11-16',
+        },
       ]),
     ).toBe(
       'Пересекается с одобренными отпусками: James Walker 09.11.2026–13.11.2026; Daniel Brooks 16.11.2026–16.11.2026',

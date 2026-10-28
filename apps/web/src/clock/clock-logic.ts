@@ -4,9 +4,7 @@ import type { ClockView, PublicConfig } from '../api/types';
 /** Время в форме по умолчанию (RULES §9-3). */
 export const DEFAULT_TIME = '09:00';
 
-export type StripData =
-  | { kind: 'off' }
-  | { kind: 'on'; companyTz: string; now: string };
+export type StripData = { kind: 'off' } | { kind: 'on'; companyTz: string; now: string };
 
 /**
  * Полоса нужна только при demoMode из /config (RULES §9-2). Без флага /clock не запрашивается:
@@ -20,11 +18,7 @@ export async function loadStrip(client: Pick<ApiClient, 'get'>): Promise<StripDa
 }
 
 /** Дата и время передаются в поясе компании, момент UTC считает сервер (RULES §9-3). */
-export function setClock(
-  client: Pick<ApiClient, 'put'>,
-  date: string,
-  time: string,
-): Promise<ClockView> {
+export function setClock(client: Pick<ApiClient, 'put'>, date: string, time: string): Promise<ClockView> {
   return client.put<ClockView>('/clock', { date, time });
 }
 

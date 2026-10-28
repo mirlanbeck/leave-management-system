@@ -2,14 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { describeProblem, toProblem, type ApiProblem } from '../api/problem';
 import { ErrorBox } from '../components/ErrorBox';
-import {
-  companyDate,
-  DEFAULT_TIME,
-  formatCompanyMoment,
-  applyClock,
-  loadStrip,
-  type StripData,
-} from './clock-logic';
+import { companyDate, DEFAULT_TIME, formatCompanyMoment, applyClock, loadStrip, type StripData } from './clock-logic';
 
 type State = { kind: 'loading' } | { kind: 'error'; problem: ApiProblem } | StripData;
 
@@ -71,18 +64,8 @@ function ClockForm(props: { companyTz: string; now: string }) {
         <span data-testid="clock-frozen">остановлены</span>
       </span>
       <form onSubmit={onSubmit}>
-        <input
-          type="date"
-          aria-label="Дата"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
-        <input
-          type="time"
-          aria-label="Время"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-        />
+        <input type="date" aria-label="Дата" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input type="time" aria-label="Время" value={time} onChange={(e) => setTime(e.target.value)} />
         <button type="submit" disabled={busy}>
           Установить
         </button>

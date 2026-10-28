@@ -61,7 +61,12 @@ export function TransferForm({ vacation, onTransferred, onClose }: Props) {
     <div className="confirm transfer-form" data-testid="transfer-form">
       <div className="dates-row">
         <label htmlFor={id('start')}>Начало</label>
-        <input id={id('start')} type="date" value={values.startDate} onChange={(e) => set({ startDate: e.target.value })} />
+        <input
+          id={id('start')}
+          type="date"
+          value={values.startDate}
+          onChange={(e) => set({ startDate: e.target.value })}
+        />
         <label htmlFor={id('end')}>Окончание</label>
         <input id={id('end')} type="date" value={values.endDate} onChange={(e) => set({ endDate: e.target.value })} />
       </div>
