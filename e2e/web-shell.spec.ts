@@ -70,7 +70,7 @@ test.describe('S3-d: каркас, вход и защита страниц', () 
     await page.goto('/hr');
     await expect(page).toHaveURL(/\/$/);
     await page.goto('/approvals');
-    await expect(page.getByRole('heading', { name: 'Согласование заявок' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Согласование', level: 1 })).toBeVisible();
 
     await page.getByRole('button', { name: 'Выйти' }).click();
     await signIn(page, 'emily');
@@ -128,6 +128,6 @@ test.describe('S3-d: каркас, вход и защита страниц', () 
 
     await signIn(page, 'daniel');
     await expect(page).toHaveURL(/\/approvals$/);
-    await expect(page.getByRole('heading', { name: 'Согласование заявок' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Согласование', level: 1 })).toBeVisible();
   });
 });

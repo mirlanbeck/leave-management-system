@@ -46,6 +46,9 @@ export interface VacationInput {
 
 export type VacationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'REPLACED';
 
+/** Подсказка сервера, что зрителю можно сейчас; права проверяет сервер (architecture §7). */
+export type VacationAction = 'cancel' | 'transfer' | 'recall' | 'approve' | 'reject';
+
 /** Заявка (architecture §7, схема Vacation); поля, нужные интерфейсу. */
 export interface Vacation {
   id: number;
@@ -58,6 +61,26 @@ export interface Vacation {
   comment: string | null;
   transferPending: boolean;
   oldVacationKept: boolean;
+  actions: VacationAction[];
+}
+
+/** Одобренный отпуск команды на пересекающиеся даты (RULES §4-6). */
+export interface Overlap {
+  vacationId: number;
+  employee: EmployeeRef;
+  startDate: string;
+  endDate: string;
+}
+
+/** GET /approvals (architecture §7, схема ApprovalItem). */
+export interface ApprovalItem {
+  vacation: Vacation;
+  /** «Доступно на дату начала»; null у переноса (S6b). */
+  availableOnStart: number | null;
+  overlaps: Overlap[];
+  canApprove: boolean;
+  /** Почему подтвердить нельзя; тот же текст, что в ответе approve. */
+  blockReason: { statusCode: number; code: string; message: string } | null;
 }
 
 export interface LoginResult {

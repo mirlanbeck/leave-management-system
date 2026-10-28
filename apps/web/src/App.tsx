@@ -4,7 +4,8 @@ import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { VacationPage } from './pages/VacationPage';
-import { ApprovalsPage, HrPage } from './pages/StubPages';
+import { ApprovalsPage } from './pages/ApprovalsPage';
+import { HrPage } from './pages/StubPages';
 import { RequireAuth, RequireRole } from './routes/guards';
 
 export function App() {
