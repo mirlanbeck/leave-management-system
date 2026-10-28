@@ -138,4 +138,15 @@ describe('401 и токен', () => {
     expect(url).not.toContain('tok');
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
   });
+
+  // RULES §6-1: смена даты выхода уходит PATCH с JSON-телом
+  it('patch шлёт метод PATCH и JSON-тело', async () => {
+    const { client, fetchFn } = setup(() => Promise.resolve(jsonResponse(200, { ok: true })));
+    await client.patch('/employees/6/hire-date', { hireDate: '2026-09-10' });
+    const [url, init] = (fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/employees/6/hire-date');
+    expect(init.method).toBe('PATCH');
+    expect(init.body).toBe(JSON.stringify({ hireDate: '2026-09-10' }));
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+  });
 });

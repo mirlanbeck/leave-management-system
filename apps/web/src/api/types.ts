@@ -106,6 +106,17 @@ export interface Calendar {
   balances?: CalendarBalance[];
 }
 
+/** Строка экрана HR «Остатки по сотрудникам» (GET /hr/balances, RULES §7-2). */
+export interface HrBalanceRow {
+  employeeId: number;
+  fullName: string;
+  teamName: string | null;
+  manager: EmployeeRef | null;
+  hireDate: string;
+  /** Остаток на сегодня; минус только после сдвига даты выхода (RULES §6-4). */
+  balance: number;
+}
+
 export interface LoginResult {
   accessToken: string;
   expiresAt: string;
