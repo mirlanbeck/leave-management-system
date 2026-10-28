@@ -101,3 +101,12 @@ export async function decideViaApi(
   });
   expect(res.status()).toBe(200);
 }
+
+/** Ставит демо-часы формой в шапке, как пользователь (RULES §9-3); время по умолчанию 09:00. */
+export async function setDemoClock(page: Page, date: string, time = '09:00') {
+  await page.getByLabel('Дата', { exact: true }).fill(date);
+  await page.getByLabel('Время', { exact: true }).fill(time);
+  await page.getByRole('button', { name: 'Установить' }).click();
+  const [y, m, d] = date.split('-');
+  await expect(page.getByTestId('clock-value')).toHaveText(`${d}.${m}.${y} ${time}`);
+}
