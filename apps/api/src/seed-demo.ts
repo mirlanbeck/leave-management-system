@@ -37,14 +37,15 @@ export function demoServices(
 ): DemoServices {
   const org = new OrgService(db);
   const balance = new BalanceService(db, clock, env);
+  const events = new EventBus();
   return {
-    vacations: new VacationsService(db, org, balance, clock, env),
+    vacations: new VacationsService(db, org, balance, clock, events, env),
     approvals: new ApprovalsService(
       db,
       org,
       balance,
       clock,
-      new EventBus(),
+      events,
       new VacationApprovedHook(),
       env,
     ),

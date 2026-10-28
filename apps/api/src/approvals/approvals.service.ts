@@ -96,7 +96,12 @@ export class ApprovalsService {
       const available = await this.availableOnStart(row, today);
       const block = approveBlock(available, row.workDays);
       items.push({
-        vacation: toVacationView(row, { id: viewer.id, hrId }),
+        vacation: toVacationView(row, {
+          id: viewer.id,
+          isHr: viewer.isHr,
+          hrId,
+          today,
+        }),
         availableOnStart: available,
         overlaps: await this.overlaps(row),
         canApprove: block === null,
@@ -191,7 +196,12 @@ export class ApprovalsService {
         } else {
           await enqueueDecisionMail(tx, updated);
         }
-        return toVacationView(updated, { id: viewer.id, hrId });
+        return toVacationView(updated, {
+          id: viewer.id,
+          isHr: viewer.isHr,
+          hrId,
+          today,
+        });
       });
     } catch (e) {
       // последняя линия: второе списание по заявке запрещает БД (architecture §6 п.5)

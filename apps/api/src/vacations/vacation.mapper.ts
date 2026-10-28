@@ -2,6 +2,7 @@ import { fromDbDate, type CalendarDate } from '../domain';
 import type { Prisma } from '../generated/prisma/client';
 import { VacationStatus } from '../generated/prisma/enums';
 import { canDecide } from '../org/policy';
+import { cancelError, recallStateError } from './cancel-rules';
 
 /** Что читается из БД для ответа: заявка, имена участников и статусы преемников (переносов). */
 export const VACATION_INCLUDE = {
@@ -49,19 +50,44 @@ export type VacationAction =
 /** Кто смотрит на заявку: для подсказки `actions` (architecture §7). */
 export interface Viewer {
   id: number;
+  isHr: boolean;
   /** id HR из OrgService.hrId: согласующий заявок директора. */
   hrId: number;
+  /** «Сегодня» по Clock и COMPANY_TZ: от него зависят отмена и отзыв (RULES §5-9). */
+  today: CalendarDate;
 }
 
 /**
- * Подсказка интерфейсу, что разрешено зрителю сейчас; права проверяет сервер. В S5 только
- * approve/reject для согласующего, пока заявка PENDING (RULES §4-1, §4-2); отмена и перенос - S6.
+ * Подсказка интерфейсу, что разрешено зрителю сейчас; права проверяет сервер теми же правилами.
+ * approve/reject - согласующему, пока заявка PENDING (RULES §4-1, §4-2); cancel - владельцу до
+ * начала (§5-4); recall - HR, пока одобренный отпуск идёт (§5-5). Перенос - S6b.
  */
 export function actionsFor(row: VacationRow, viewer: Viewer): VacationAction[] {
-  return row.status === VacationStatus.PENDING &&
+  const actions: VacationAction[] = [];
+  if (
+    row.status === VacationStatus.PENDING &&
     canDecide(viewer.id, row.employee, viewer.hrId)
-    ? ['approve', 'reject']
-    : [];
+  ) {
+    actions.push('approve', 'reject');
+  }
+  const startDate = fromDbDate(row.startDate);
+  const cancel = cancelError({
+    actorId: viewer.id,
+    employeeId: row.employeeId,
+    status: row.status,
+    startDate,
+    today: viewer.today,
+  });
+  if (!cancel) actions.push('cancel');
+  const recall = recallStateError({
+    actorIsHr: viewer.isHr,
+    status: row.status,
+    startDate,
+    endDate: fromDbDate(row.endDate),
+    today: viewer.today,
+  });
+  if (!recall) actions.push('recall');
+  return actions;
 }
 
 /** Пометки выводятся из данных (architecture §2), не хранятся. */

@@ -12,6 +12,7 @@ import { createTestApp } from '../testing/test-app';
 import {
   RulesOrgKey,
   createPool,
+  insertLedger,
   insertVacation,
   seedRulesOrg,
   truncateAll,
@@ -243,6 +244,44 @@ describe('календарь: GET /calendar (integration, нужен Postgres)',
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('VALIDATION_FAILED');
     expect(res.body.details.fields).toHaveProperty(field);
+  });
+
+  // RULES §3-11, §5-4, §5-5 (S6-a): после отмены и отзыва отпуск пропадает из календаря целиком
+  it('после отмены сотрудником и отзыва HR отпуска в календаре нет ни у кого', async () => {
+    const cancelled = await vacation('employee1', {
+      start: '2026-11-16',
+      end: '2026-11-20',
+    });
+    const recalled = await vacation('employee2');
+    for (const vacationId of [cancelled, recalled]) {
+      await insertLedger(pool, { kind: 'DEBIT', vacationId, halfDays: 10 });
+    }
+    const kept = await vacation('employee4');
+
+    const post = async (login: RulesOrgKey, path: string, body: object) => {
+      const auth = bearer(await token(login)); // до создания запроса, как в get
+      return request(app.getHttpServer()).post(path).set(auth).send(body);
+    };
+    expect(
+      (await post('employee1', `/vacations/${cancelled}/cancel`, {})).status,
+    ).toBe(200);
+    await setDbClock(pool, '2026-11-04T03:00:00.000Z'); // отпуск employee2 идёт
+    expect(
+      (
+        await post('hr', `/vacations/${recalled}/recall`, {
+          returnDate: '2026-11-05',
+        })
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (await calendar('hr')).body.entries.map(
+        (e: { vacationId: number }) => e.vacationId,
+      ),
+    ).toEqual([kept]);
+    expect(who((await calendar('manager1')).body)).toEqual([]);
+    expect(who((await calendar('employee1')).body)).toEqual([]);
+    expect(who((await calendar('employee2')).body)).toEqual([]);
   });
 
   // RULES §7-1

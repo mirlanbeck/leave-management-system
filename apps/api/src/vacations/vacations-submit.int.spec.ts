@@ -136,7 +136,7 @@ describe('подача заявки: POST /vacations (integration, нужен Po
         returnDate: null,
         transferPending: false,
         oldVacationKept: false,
-        actions: [],
+        actions: ['cancel'], // автор до начала может отменить (RULES §5-4)
       });
       const auth = bearer(await token('employee1'));
       const card = await request(app.getHttpServer())
