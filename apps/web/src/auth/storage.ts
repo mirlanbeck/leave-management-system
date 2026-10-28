@@ -33,6 +33,4 @@ export function createTokenStore(storage: () => Storage | undefined): TokenStore
   };
 }
 
-export const tokenStore = createTokenStore(() =>
-  typeof sessionStorage === 'undefined' ? undefined : sessionStorage,
-);
+export const tokenStore = createTokenStore(() => (typeof sessionStorage === 'undefined' ? undefined : sessionStorage));

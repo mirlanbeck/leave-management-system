@@ -41,7 +41,11 @@ describe('«Перенести» в «Моих заявках»', () => {
 
   // RULES §5-2: тело переноса - те же поля, что у подачи; комментарий необязателен
   it('тело запроса из формы: backstopper числом, workDays не отправляется', () => {
-    const body = toVacationInput({ ...initialTransferForm(vacation()), startDate: '2026-11-16', endDate: '2026-11-20' });
+    const body = toVacationInput({
+      ...initialTransferForm(vacation()),
+      startDate: '2026-11-16',
+      endDate: '2026-11-20',
+    });
     expect(body).toEqual({ startDate: '2026-11-16', endDate: '2026-11-20', backstopperId: 8, comment: '' });
   });
 

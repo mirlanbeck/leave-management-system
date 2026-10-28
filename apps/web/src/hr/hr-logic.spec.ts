@@ -44,6 +44,8 @@ describe('экран HR «Все заявки»', () => {
       'Возвращаются рабочие дни с даты выхода по 13.11.2026 включительно; день выхода — рабочий.',
     );
     expect(recallBody('2026-11-12')).toEqual({ returnDate: '2026-11-12' });
-    expect(recallSuccessText('James Walker', '2026-11-12')).toBe('James Walker: отзыв оформлен, дата выхода 12.11.2026');
+    expect(recallSuccessText('James Walker', '2026-11-12')).toBe(
+      'James Walker: отзыв оформлен, дата выхода 12.11.2026',
+    );
   });
 });

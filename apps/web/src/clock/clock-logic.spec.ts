@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiRequestError } from '../api/problem';
-import {
-  applyClock,
-  companyDate,
-  DEFAULT_TIME,
-  formatCompanyMoment,
-  loadStrip,
-  setClock,
-} from './clock-logic';
+import { applyClock, companyDate, DEFAULT_TIME, formatCompanyMoment, loadStrip, setClock } from './clock-logic';
 
 function fakeGet(responses: Record<string, unknown>) {
   return vi.fn(async (path: string) => {

@@ -1,12 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, setUnauthorizedListener } from '../api';
 import { ApiRequestError, toProblem, type ApiProblem } from '../api/problem';
 import type { LoginResult, Profile } from '../api/types';

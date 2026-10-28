@@ -45,10 +45,7 @@ describe('«Подать» во время запроса', () => {
 
   // RULES §10-1
   it('после ответа, в том числе ошибки, можно отправить снова', async () => {
-    const send = vi
-      .fn<() => Promise<void>>()
-      .mockRejectedValueOnce(new Error('422'))
-      .mockResolvedValueOnce(undefined);
+    const send = vi.fn<() => Promise<void>>().mockRejectedValueOnce(new Error('422')).mockResolvedValueOnce(undefined);
     const submit = singleFlight(send);
     await expect(submit()).rejects.toThrow('422');
     await submit();
