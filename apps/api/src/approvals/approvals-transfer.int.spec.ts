@@ -302,7 +302,7 @@ describe('согласование переноса (integration, нужен Pos
       });
     });
 
-    // RULES §4-6; architecture §5, §13 п.9: переносимый отпуск в пересечениях не участвует
+    // RULES §4-6; architecture, разделы 5 и 13 (п. 9): переносимый отпуск в пересечениях не участвует
     it('пересечения: старый отпуск сотрудника не показан, отпуск коллеги показан', async () => {
       const { a, b } = await pendingTransfer();
       const colleague = await approved(
