@@ -68,7 +68,10 @@ export async function insertUser(db: Db, u: NewUser): Promise<number> {
   return rows[0].id;
 }
 
-/** Сдвиг даты выхода для фикстуры (PATCH hire-date появится в S6). */
+/**
+ * Дата выхода для подготовки фикстуры напрямую в БД. Поведение после смены даты HR проверяется
+ * через PATCH /employees/{id}/hire-date (S6-c).
+ */
 export async function shiftHireDate(
   db: Db,
   userId: number,

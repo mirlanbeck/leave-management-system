@@ -15,7 +15,6 @@ import {
   insertLedger,
   insertVacation,
   seedRulesOrg,
-  shiftHireDate,
   truncateAll,
 } from '../testing/test-db';
 
@@ -158,8 +157,13 @@ describe('GET /me/balance (integration, нужен Postgres)', () => {
       vacationId: vacation,
       halfDays: 10,
     });
-    // выход 2026-09-10: единственное начисление 1 октября, 21 день -> 2,0
-    await shiftHireDate(pool, ids.employee1, '2026-09-10');
+    // HR сдвигает выход на 2026-09-10: единственное начисление 1 октября, 21 день -> 2,0
+    const hr = await loginAs(app, 'hr');
+    const patched = await request(app.getHttpServer())
+      .patch(`/employees/${ids.employee1}/hire-date`)
+      .set(bearer(hr))
+      .send({ hireDate: '2026-09-10' });
+    expect(patched.status).toBe(200);
     const res = await balance('employee1');
     expect(res.body.balance).toBe(-3);
   });

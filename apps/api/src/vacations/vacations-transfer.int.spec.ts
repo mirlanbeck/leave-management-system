@@ -16,7 +16,6 @@ import {
   insertLedger,
   insertVacation,
   seedRulesOrg,
-  shiftHireDate,
   truncateAll,
 } from '../testing/test-db';
 
@@ -374,7 +373,12 @@ describe('перенос: POST /vacations/{id}/transfer, блокировки и
     // RULES §3-12, §5-2: дата выхода, начисление и остаток к переносу не применяются
     it('дата выхода сдвинута позже новых дат, остаток отрицательный - перенос принимается', async () => {
       const { id } = await vacation('employee1');
-      await shiftHireDate(pool, ids.employee1, '2026-12-01');
+      const auth = bearer(await token('hr'));
+      const patched = await request(app.getHttpServer())
+        .patch(`/employees/${ids.employee1}/hire-date`)
+        .set(auth)
+        .send({ hireDate: '2026-12-01' });
+      expect(patched.status).toBe(200);
       expect(await balance('employee1')).toBeLessThan(0);
       const res = await transfer('employee1', id);
       expect(res.status).toBe(201);

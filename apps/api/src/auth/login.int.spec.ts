@@ -146,13 +146,7 @@ describe('POST /auth/login (integration, нужен Postgres)', () => {
     expect(await granted(ids.ok)).toBe(true);
   });
 
-  // RULES §6-7
-  it('сдвиг даты выхода вперёд признак не снимает', async () => {
-    await post('ok');
-    await shiftHireDate(pool, ids.ok, '2027-01-01');
-    expect((await post('ok')).status).toBe(200);
-    expect(await granted(ids.ok)).toBe(true);
-  });
+  // сдвиг даты выхода вперёд после первого входа - через PATCH HR, hr/hr.int.spec.ts (RULES §6-7)
 
   // RULES §6-7, §9-2
   it('откат демо-часов признак не снимает, а не входившему вход закрыт', async () => {
