@@ -3,6 +3,7 @@ import {
   approveBlock,
   overlapOwner,
   overlapsWith,
+  transferApproveBlock,
 } from './approval-rules';
 
 const HR = 3;
@@ -122,5 +123,23 @@ describe('approveBlock: повторная проверка остатка', () 
     expect(approveBlock(-1, 3)?.message).toBe(
       'Согласовать нельзя: осталось −1 дней, в заявке 3',
     );
+  });
+});
+
+describe('transferApproveBlock: утверждение переноса после начала старого отпуска', () => {
+  // RULES §5-2 «Перенос нельзя утвердить, если старый отпуск уже начался»; §5-9
+  it('накануне начала старого - можно', () => {
+    expect(transferApproveBlock('2026-11-09', '2026-11-08')).toBeNull();
+  });
+
+  // RULES §5-2: согласующий может его только отклонить
+  it('в день начала и позже - 422 TRANSFER_APPROVE_AFTER_START', () => {
+    const expected = {
+      status: 422,
+      code: 'TRANSFER_APPROVE_AFTER_START',
+      message: 'Старый отпуск уже начался: перенос можно только отклонить',
+    };
+    expect(transferApproveBlock('2026-11-09', '2026-11-09')).toEqual(expected);
+    expect(transferApproveBlock('2026-11-09', '2026-11-20')).toEqual(expected);
   });
 });

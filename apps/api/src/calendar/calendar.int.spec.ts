@@ -284,6 +284,43 @@ describe('календарь: GET /calendar (integration, нужен Postgres)',
     expect(who((await calendar('employee2')).body)).toEqual([]);
   });
 
+  // RULES §3-11, §5-2 (S6-b): пока перенос ждёт решения - старые даты; после утверждения - новые
+  it('после утверждения переноса в календаре новые даты, а «Заменена переносом» не показывается', async () => {
+    const old = await vacation('employee1');
+    await insertLedger(pool, {
+      kind: 'DEBIT',
+      vacationId: old,
+      halfDays: 10,
+    });
+    const post = async (login: RulesOrgKey, path: string, body: object) => {
+      const auth = bearer(await token(login)); // до создания запроса, как в get
+      return request(app.getHttpServer()).post(path).set(auth).send(body);
+    };
+    const transfer = await post('employee1', `/vacations/${old}/transfer`, {
+      startDate: '2026-11-16',
+      endDate: '2026-11-20',
+      backstopperId: ids.hr,
+    });
+    expect(transfer.status).toBe(201);
+    type Entry = { vacationId: number; startDate: string };
+    const dates = async (login: RulesOrgKey) =>
+      ((await calendar(login)).body.entries as Entry[]).map((e) => [
+        e.vacationId,
+        e.startDate,
+      ]);
+    for (const login of ['employee1', 'manager1', 'hr'] as const) {
+      expect(await dates(login)).toEqual([[old, '2026-11-02']]);
+    }
+
+    expect(
+      (await post('manager1', `/vacations/${transfer.body.id}/approve`, {}))
+        .status,
+    ).toBe(200);
+    for (const login of ['employee1', 'manager1', 'hr'] as const) {
+      expect(await dates(login)).toEqual([[transfer.body.id, '2026-11-16']]);
+    }
+  });
+
   // RULES §7-1
   it('без токена 401', async () => {
     const res = await request(app.getHttpServer()).get(`/calendar?${NOVEMBER}`);

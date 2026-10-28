@@ -23,9 +23,16 @@ import {
   approveBlock,
   overlapOwner,
   overlapsWith,
+  transferApproveBlock,
   type ApprovalError,
 } from './approval-rules';
 import { VacationApprovedHook } from './vacation-approved.hook';
+
+/** Заявка на экране согласующего и дата начала отпуска, который она переносит. */
+const PENDING_INCLUDE = {
+  ...VACATION_INCLUDE,
+  replaces: { select: { startDate: true } },
+} satisfies Prisma.VacationInclude;
 
 /** Элемент экрана «Заявки на согласование» (architecture §7, ApprovalItem). */
 export interface ApprovalItem {
@@ -87,14 +94,19 @@ export class ApprovalsService {
     if (viewer.isHr) employeeOr.push({ managerId: null });
     const rows = await this.prisma.vacation.findMany({
       where: { status: VacationStatus.PENDING, employee: { OR: employeeOr } },
-      include: VACATION_INCLUDE,
+      include: PENDING_INCLUDE,
       orderBy: { id: 'asc' },
     });
     const today = await this.balance.today();
     const items: ApprovalItem[] = [];
     for (const row of rows) {
-      const available = await this.availableOnStart(row, today);
-      const block = approveBlock(available, row.workDays);
+      // перенос: остаток не проверяется, после начала старого - только отклонить (RULES §5-2)
+      const available = row.replaces
+        ? null
+        : await this.availableOnStart(row, today);
+      const block = row.replaces
+        ? transferApproveBlock(fromDbDate(row.replaces.startDate), today)
+        : approveBlock(available!, row.workDays);
       items.push({
         vacation: toVacationView(row, {
           id: viewer.id,
@@ -118,7 +130,10 @@ export class ApprovalsService {
 
   /**
    * Подтвердить или отклонить (RULES §4-1…§4-5, §10-1). Порядок ошибок architecture §8:
-   * NOT_FOUND → APPROVE_OWN_REQUEST/NOT_APPROVER → ALREADY_PROCESSED → APPROVE_INSUFFICIENT_BALANCE.
+   * NOT_FOUND → APPROVE_OWN_REQUEST/NOT_APPROVER → ALREADY_PROCESSED →
+   * APPROVE_INSUFFICIENT_BALANCE (обычная заявка) или TRANSFER_APPROVE_AFTER_START (перенос).
+   * Утверждение переноса (RULES §5-2, §6-6): остаток не проверяется, списания нет; старый отпуск
+   * «Заменена переносом», затем перенос «Одобрена» - порядок важен для EXCLUDE (architecture §3).
    */
   async decide(
     viewer: AuthUser,
@@ -130,10 +145,11 @@ export class ApprovalsService {
     const today = companyToday(now, companyTz(this.env));
     const comment = rawComment?.trim() || null;
 
-    // Сотрудник заявки читается до блокировки: employeeId заявки не меняется (architecture §6)
+    // Сотрудник и исходная заявка читаются до блокировки: employeeId и replacesId не меняются
+    // (architecture §6)
     const head = await this.prisma.vacation.findUnique({
       where: { id },
-      select: { employeeId: true },
+      select: { employeeId: true, replacesId: true },
     });
     if (!head || !(await this.org.canSee(viewer, head.employeeId))) {
       throw notFound();
@@ -146,7 +162,10 @@ export class ApprovalsService {
           { id: number; hireDate: Date; managerId: number | null }[]
         >`SELECT id, "hireDate", "managerId" FROM "User"
           WHERE id = ${head.employeeId} FOR NO KEY UPDATE`;
-        await tx.$queryRaw`SELECT id FROM "Vacation" WHERE id = ${id} FOR NO KEY UPDATE`;
+        // для переноса {replacesId, id} по возрастанию: исходная создана раньше (architecture §6)
+        const locked = head.replacesId === null ? [id] : [head.replacesId, id];
+        await tx.$queryRaw`SELECT id FROM "Vacation"
+          WHERE id IN (${Prisma.join(locked)}) ORDER BY id FOR NO KEY UPDATE`;
         const hrId = await this.org.hrId(tx);
 
         const actor = actorError(viewer.id, employee, hrId);
@@ -156,7 +175,9 @@ export class ApprovalsService {
         const row = await tx.vacation.findUniqueOrThrow({ where: { id } });
         if (row.status !== VacationStatus.PENDING) throw alreadyProcessed();
 
-        if (decision === 'approve') {
+        if (decision === 'approve' && row.replacesId !== null) {
+          await this.replaceSource(tx, row.replacesId, today);
+        } else if (decision === 'approve') {
           // RULES §4-3: остаток повторно, по той же формуле «доступно на дату начала»
           const available = await this.balance.availableOnDays(
             { id: employee.id, hireDate: fromDbDate(employee.hireDate) },
@@ -209,7 +230,15 @@ export class ApprovalsService {
       throw e;
     }
 
-    if (decision === 'approve') {
+    if (decision === 'approve' && head.replacesId !== null) {
+      // RULES §10-2: перенос утверждён, старый отпуск «Заменена переносом»
+      this.events.publish({
+        type: 'vacation.transfer-approved',
+        employeeId: view.employee.id,
+        vacationId: view.id,
+        replacedId: head.replacesId,
+      });
+    } else if (decision === 'approve') {
       this.events.publish({
         type: 'vacation.approved',
         employeeId: view.employee.id,
@@ -217,6 +246,33 @@ export class ApprovalsService {
       });
     }
     return view;
+  }
+
+  /**
+   * Утверждение переноса, шаг 1 (RULES §5-2): старый отпуск, пока не начался, получает
+   * «Заменена переносом». Журнал не меняется: списание остаётся за ним (§6-6).
+   */
+  private async replaceSource(
+    tx: Prisma.TransactionClient,
+    sourceId: number,
+    today: CalendarDate,
+  ): Promise<void> {
+    const source = await tx.vacation.findUniqueOrThrow({
+      where: { id: sourceId },
+      select: { status: true, startDate: true },
+    });
+    // пока перенос ждёт решения, старый отменить, отозвать и перенести нельзя (§5-2, §5-3)
+    if (source.status !== VacationStatus.APPROVED) {
+      throw new Error(
+        `Исходная заявка ${sourceId} не одобрена (${source.status}) при ожидающем переносе`,
+      );
+    }
+    const block = transferApproveBlock(fromDbDate(source.startDate), today);
+    if (block) throw toApiError(block);
+    await tx.vacation.update({
+      where: { id: sourceId },
+      data: { status: VacationStatus.REPLACED },
+    });
   }
 
   private async availableOnStart(
@@ -234,7 +290,10 @@ export class ApprovalsService {
     );
   }
 
-  /** Одобренные отпуска команды на пересекающиеся даты (RULES §4-6; architecture §5). */
+  /**
+   * Одобренные отпуска команды на пересекающиеся даты (RULES §4-6; architecture §5). Отпуск,
+   * который заявка переносит, не учитывается (как в §5-2; architecture §13 п.9).
+   */
   private async overlaps(row: VacationRow): Promise<ApprovalItem['overlaps']> {
     const owner = overlapOwner(row.employee);
     const team = [owner, ...(await this.org.directReportIds(owner))];
@@ -244,6 +303,7 @@ export class ApprovalsService {
         status: VacationStatus.APPROVED,
         startDate: { lte: row.endDate },
         endDate: { gte: row.startDate },
+        ...(row.replacesId === null ? {} : { id: { not: row.replacesId } }),
       },
       select: {
         id: true,
