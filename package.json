@@ -19,7 +19,8 @@
     "smoke:compose": "node scripts/smoke-compose.mjs",
     "build": "npm run build -w apps/api && npm run build -w apps/web",
     "e2e": "npm test -w e2e",
-    "e2e:reset": "npm run reset -w e2e"
+    "e2e:reset": "npm run reset -w e2e",
+    "seed:demo": "docker compose exec -T api node dist/seed-demo.js"
   },
   "devDependencies": {
     "cross-env": "^10.0.0"

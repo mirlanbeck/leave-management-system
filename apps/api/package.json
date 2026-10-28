@@ -22,7 +22,8 @@
     "typecheck": "prisma generate && tsc --noEmit",
     "test:int": "node scripts/test-int.mjs",
     "prisma:migrate": "prisma migrate dev",
-    "db:drift": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code"
+    "db:drift": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code",
+    "seed:demo": "node dist/seed-demo.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
