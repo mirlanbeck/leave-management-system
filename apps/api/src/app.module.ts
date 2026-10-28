@@ -8,6 +8,7 @@ import { CommonModule } from './common/common.module';
 import { AppConfigModule } from './config/config.module';
 import { EventsModule } from './events/events.module';
 import { HealthModule } from './health/health.module';
+import { HrModule } from './hr/hr.module';
 import { MailModule } from './mail/mail.module';
 import { OrgModule } from './org/org.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -25,6 +26,7 @@ import { VacationsModule } from './vacations/vacations.module';
     VacationsModule,
     ApprovalsModule,
     CalendarModule,
+    HrModule,
     EventsModule,
     MailModule,
     HealthModule,

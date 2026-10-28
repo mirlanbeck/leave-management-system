@@ -1,5 +1,5 @@
 // Матрица доступа: маршрут x роль -> ожидаемый статус. Этапы S4-S8 дописывают сюда строки
-// (RULES §7-2). Здесь строки S3, S4, S5 (в том числе календарь S5-e), S6-a (отмена, отзыв) и S6-b (перенос).
+// (RULES §7-2). Здесь строки S3, S4, S5 (в том числе календарь S5-e), S6-a (отмена, отзыв), S6-b (перенос) и S6-c (экран HR, дата выхода).
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
@@ -22,7 +22,7 @@ import {
 
 type Actor =
   'director' | 'deputy' | 'hr' | 'manager1' | 'employee1' | 'preHire' | 'anon';
-type Method = 'get' | 'post' | 'put';
+type Method = 'get' | 'post' | 'put' | 'patch';
 
 const ACTORS: Actor[] = [
   'director',
@@ -261,6 +261,32 @@ const ROWS: Row[] = [
       anon: 401,
     },
     rules: '§5-2, §7-2',
+  },
+  {
+    // остатки всех видит только HR (RULES §7-2)
+    method: 'get',
+    path: '/hr/balances',
+    demo: true,
+    expected: { ...signedIn(403), hr: 200 },
+    rules: '§7-2',
+  },
+  {
+    // дату выхода меняет только HR; дата employee1 (id 6) та же, состояние не меняется.
+    // Руководитель и сам сотрудник видят его, но 403; кому не виден - 404 (RULES §6-1, §7-2)
+    method: 'patch',
+    path: '/employees/6/hire-date',
+    body: { hireDate: '2022-03-15' },
+    demo: true,
+    expected: {
+      director: 404,
+      deputy: 404,
+      hr: 200,
+      manager1: 403,
+      employee1: 403,
+      preHire: 404,
+      anon: 401,
+    },
+    rules: '§6-1, §7-2',
   },
   {
     // календарь видит любой вошедший; кого он показывает, решает scope (RULES §7-2)

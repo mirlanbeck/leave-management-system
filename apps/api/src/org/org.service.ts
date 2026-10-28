@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth-user';
+import {
+  fromDbDate,
+  toDbDate,
+  type CalendarDate,
+} from '../domain/calendar-date';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { approverOf, canSee, rolesOf, scope, type Scope } from './policy';
@@ -18,6 +23,15 @@ export interface Profile {
   manager: { id: number; fullName: string } | null;
   isHr: boolean;
   isManager: boolean;
+}
+
+/** Сотрудник для экрана HR «Остатки по сотрудникам» (RULES §7-2). */
+export interface RosterEntry {
+  id: number;
+  fullName: string;
+  teamName: string | null;
+  hireDate: CalendarDate;
+  manager: EmployeeRef | null;
 }
 
 /** Структура читается на каждый запрос, без кэша (architecture §5). */
@@ -79,6 +93,57 @@ export class OrgService {
       orderBy: { id: 'asc' },
     });
     return hr?.id ?? -1;
+  }
+
+  /** Все сотрудники с руководителем для экрана HR (RULES §7-2), по имени и id. */
+  async roster(): Promise<RosterEntry[]> {
+    const rows = await this.prisma.user.findMany({
+      select: {
+        id: true,
+        fullName: true,
+        teamName: true,
+        hireDate: true,
+        manager: { select: { id: true, fullName: true } },
+      },
+      orderBy: [{ fullName: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((r) => ({ ...r, hireDate: fromDbDate(r.hireDate) }));
+  }
+
+  async rosterEntry(id: number): Promise<RosterEntry | null> {
+    const r = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        fullName: true,
+        teamName: true,
+        hireDate: true,
+        manager: { select: { id: true, fullName: true } },
+      },
+    });
+    return r && { ...r, hireDate: fromDbDate(r.hireDate) };
+  }
+
+  /**
+   * Смена даты выхода (RULES §6-1, §6-6): блокировка User FOR NO KEY UPDATE (architecture §6),
+   * та же дата не пишется. Журнал и заявки не трогаются. `true`, если дата изменилась;
+   * `null`, если сотрудника нет.
+   */
+  async setHireDate(
+    employeeId: number,
+    hireDate: CalendarDate,
+  ): Promise<boolean | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<{ hireDate: Date }[]>`
+        SELECT "hireDate" FROM "User" WHERE id = ${employeeId} FOR NO KEY UPDATE`;
+      if (!row) return null;
+      if (fromDbDate(row.hireDate) === hireDate) return false;
+      await tx.user.update({
+        where: { id: employeeId },
+        data: { hireDate: toDbDate(hireDate) },
+      });
+      return true;
+    });
   }
 
   async profile(user: AuthUser): Promise<Profile> {
