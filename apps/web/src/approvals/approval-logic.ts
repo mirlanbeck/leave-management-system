@@ -1,5 +1,5 @@
 import { describeProblem, toProblem } from '../api/problem';
-import type { ApprovalItem, Overlap } from '../api/types';
+import type { ApprovalItem, Overlap, Vacation } from '../api/types';
 import { formatHireDate as formatDate } from '../profile/format';
 import { formatDays, isNegativeDays } from '../vacation/format';
 
@@ -16,10 +16,18 @@ export function overlapText(overlaps: Overlap[]): string | null {
   return `Пересекается с одобренными отпусками: ${list.join('; ')}`;
 }
 
-/** «Доступно на дату начала» (RULES §4-7, §2-7); минус помечается (RULES §6-4); null у переноса. */
+/**
+ * «Доступно на дату начала» (RULES §4-7, §2-7); минус помечается (RULES §6-4). null только у
+ * переноса: остаток не проверяется (RULES §5-2; DECISIONS 2026-10-28 17:06).
+ */
 export function availableText(days: number | null): { text: string; negative: boolean } {
-  if (days === null) return { text: '—', negative: false };
+  if (days === null) return { text: 'не проверяется (перенос)', negative: false };
   return { text: formatDays(days), negative: isNegativeDays(days) };
+}
+
+/** Плашка заявки-переноса на карточке согласования (DECISIONS 2026-10-28 17:06); старые даты не показываются. */
+export function transferLabel(v: Pick<Vacation, 'replacesId'>): string | null {
+  return v.replacesId === null ? null : 'Перенос одобренного отпуска';
 }
 
 export interface DecisionButtons {

@@ -12,6 +12,7 @@ function vacation(over: Partial<Vacation> = {}): Vacation {
     workDays: 5,
     status: 'APPROVED',
     comment: null,
+    replacesId: null,
     transferPending: false,
     oldVacationKept: false,
     actions: ['cancel'],

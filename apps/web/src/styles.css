@@ -203,3 +203,15 @@ dd {
   gap: 0.25rem;
   max-width: 22rem;
 }
+/* Форма «Перенести» в строке «Моих заявок» (RULES §5-2) */
+.transfer-form .dates-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.5rem;
+  align-items: center;
+}
+.transfer-form select,
+.transfer-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+}

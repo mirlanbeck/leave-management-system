@@ -9,6 +9,7 @@ import {
   oneAtATime,
   overlapText,
   successText,
+  transferLabel,
 } from './approval-logic';
 
 function item(over: Partial<ApprovalItem> = {}, actions: ApprovalItem['vacation']['actions'] = ['approve', 'reject']): ApprovalItem {
@@ -22,6 +23,7 @@ function item(over: Partial<ApprovalItem> = {}, actions: ApprovalItem['vacation'
       workDays: 5,
       status: 'PENDING',
       comment: null,
+      replacesId: null,
       transferPending: false,
       oldVacationKept: false,
       actions,
@@ -74,9 +76,31 @@ describe('остаток на дату начала', () => {
     expect(availableText(-3)).toEqual({ text: '−3', negative: true });
   });
 
-  // architecture §7: null только у переноса (S6b), остаток не проверяется
-  it('нет остатка: прочерк', () => {
-    expect(availableText(null)).toEqual({ text: '—', negative: false });
+  // RULES §5-2: null только у переноса, остаток не проверяется (DECISIONS 2026-10-28 17:06)
+  it('перенос: «не проверяется (перенос)»', () => {
+    expect(availableText(null)).toEqual({ text: 'не проверяется (перенос)', negative: false });
+  });
+});
+
+describe('заявка-перенос на карточке', () => {
+  // RULES §4-7, §5-2; DECISIONS 2026-10-28 17:06: плашка без старых дат
+  it('плашка только у переноса', () => {
+    expect(transferLabel({ replacesId: null })).toBeNull();
+    expect(transferLabel({ replacesId: 3 })).toBe('Перенос одобренного отпуска');
+  });
+
+  // RULES §5-2: после начала старого отпуска подтвердить нельзя, отклонить можно; причина от сервера
+  it('старый начался: «Подтвердить» недоступна, «Отклонить» доступна, причина видна', () => {
+    const reason = 'Старый отпуск уже начался: перенос можно только отклонить';
+    const b = decisionButtons(
+      item({
+        availableOnStart: null,
+        canApprove: false,
+        blockReason: { statusCode: 422, code: 'TRANSFER_APPROVE_AFTER_START', message: reason },
+      }),
+      false,
+    );
+    expect(b).toMatchObject({ approveEnabled: false, rejectEnabled: true, reason });
   });
 });
 

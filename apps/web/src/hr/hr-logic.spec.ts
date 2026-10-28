@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Vacation } from '../api/types';
-import { canRecall, canSubmitRecall, marksText, recallBody, recallHint, recallSuccessText } from './hr-logic';
+import { canRecall, canSubmitRecall, recallBody, recallHint, recallSuccessText } from './hr-logic';
 
 const period = { startDate: '2026-11-09', endDate: '2026-11-13' };
 
@@ -13,6 +13,7 @@ function vacation(over: Partial<Vacation> = {}): Vacation {
     workDays: 5,
     status: 'APPROVED',
     comment: null,
+    replacesId: null,
     transferPending: false,
     oldVacationKept: false,
     actions: ['recall'],
@@ -21,13 +22,6 @@ function vacation(over: Partial<Vacation> = {}): Vacation {
 }
 
 describe('экран HR «Все заявки»', () => {
-  // RULES §3-11: пометки переноса
-  it('пометки: пусто, «перенос на рассмотрении», «Старый отпуск остаётся»', () => {
-    expect(marksText(vacation())).toBe('');
-    expect(marksText(vacation({ transferPending: true }))).toBe('перенос на рассмотрении');
-    expect(marksText(vacation({ oldVacationKept: true }))).toBe('Старый отпуск остаётся');
-  });
-
   // RULES §5-5, §5-10: «Отзыв» только там, где сервер разрешил (до начала и после окончания - нет)
   it('«Отзыв» только по подсказке recall', () => {
     expect(canRecall(vacation())).toBe(true);

@@ -1,14 +1,6 @@
 import type { Vacation } from '../api/types';
 import { formatHireDate as formatDate } from '../profile/format';
 
-/** Пометки заявки (RULES §3-11): выводит сервер, здесь только текст; до S6b всегда пусто. */
-export function marksText(v: Pick<Vacation, 'transferPending' | 'oldVacationKept'>): string {
-  const marks: string[] = [];
-  if (v.transferPending) marks.push('перенос на рассмотрении');
-  if (v.oldVacationKept) marks.push('Старый отпуск остаётся');
-  return marks.join('; ');
-}
-
 /** «Отзыв» по подсказке сервера: HR, одобренный отпуск идёт (RULES §5-5; DECISIONS 2026-10-28 15:41). */
 export function canRecall(v: Vacation): boolean {
   return v.actions.includes('recall');

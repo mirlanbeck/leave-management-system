@@ -59,6 +59,8 @@ export interface Vacation {
   workDays: number;
   status: VacationStatus;
   comment: string | null;
+  /** Заявка-перенос: id отпуска, который она переносит (RULES §5-12); иначе null. */
+  replacesId: number | null;
   transferPending: boolean;
   oldVacationKept: boolean;
   actions: VacationAction[];
