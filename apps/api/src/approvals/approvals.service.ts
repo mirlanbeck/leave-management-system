@@ -9,6 +9,7 @@ import { fromDbDate, type CalendarDate } from '../domain';
 import { Prisma } from '../generated/prisma/client';
 import { LedgerKind, VacationStatus } from '../generated/prisma/enums';
 import { EventBus } from '../events/event-bus';
+import { enqueueDecisionMail } from '../mail/decision-mail';
 import { OrgService, type EmployeeRef } from '../org/org.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -24,6 +25,7 @@ import {
   overlapsWith,
   type ApprovalError,
 } from './approval-rules';
+import { VacationApprovedHook } from './vacation-approved.hook';
 
 /** Элемент экрана «Заявки на согласование» (architecture §7, ApprovalItem). */
 export interface ApprovalItem {
@@ -57,7 +59,7 @@ function isDuplicateDebit(e: unknown): boolean {
 /**
  * Экран согласующего и решение (RULES §4). Решение - одна транзакция под блокировками
  * architecture §6: User сотрудника, затем Vacation, перечитывание статуса и остатка, статус и
- * списание. Событие шины - после коммита (architecture §4, §9).
+ * списание, письмо о решении. Событие шины - после коммита (architecture §4, §9).
  */
 @Injectable()
 export class ApprovalsService {
@@ -67,6 +69,7 @@ export class ApprovalsService {
     private readonly balance: BalanceService,
     private readonly clock: Clock,
     private readonly events: EventBus,
+    private readonly approvedHook: VacationApprovedHook,
     @Inject(APP_ENV) private readonly env: NodeJS.ProcessEnv,
   ) {}
 
@@ -182,6 +185,12 @@ export class ApprovalsService {
           },
           include: VACATION_INCLUDE,
         });
+        // письмо о решении в той же транзакции (RULES §8-2, §10-1; architecture §4, §9)
+        if (decision === 'approve') {
+          await this.approvedHook.onVacationApproved(tx, updated);
+        } else {
+          await enqueueDecisionMail(tx, updated);
+        }
         return toVacationView(updated, { id: viewer.id, hrId });
       });
     } catch (e) {
