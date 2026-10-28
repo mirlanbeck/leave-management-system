@@ -1,5 +1,5 @@
 // Матрица доступа: маршрут x роль -> ожидаемый статус. Этапы S4-S8 дописывают сюда строки
-// (RULES §7-2). Здесь строки S3, S4, S5 (в том числе календарь S5-e) и S6-a (отмена, отзыв).
+// (RULES §7-2). Здесь строки S3, S4, S5 (в том числе календарь S5-e), S6-a (отмена, отзыв) и S6-b (перенос).
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
@@ -242,6 +242,25 @@ const ROWS: Row[] = [
       anon: 401,
     },
     rules: '§5-5, §7-2',
+  },
+  {
+    // переносит только владелец: его заявка PENDING - 422 TRANSFER_SOURCE_NOT_APPROVED;
+    // руководитель и HR видят, но 403; кому не видна - 404 (RULES §5-2, §7-2)
+    method: 'post',
+    path: '/vacations/1/transfer',
+    body: { startDate: '2026-11-16', endDate: '2026-11-20', backstopperId: 5 },
+    demo: true,
+    pendingVacation: true,
+    expected: {
+      director: 404,
+      deputy: 404,
+      hr: 403,
+      manager1: 403,
+      employee1: 422,
+      preHire: 404,
+      anon: 401,
+    },
+    rules: '§5-2, §7-2',
   },
   {
     // календарь видит любой вошедший; кого он показывает, решает scope (RULES §7-2)

@@ -18,6 +18,7 @@ const cancel = (patch: Partial<CancelFacts> = {}) =>
     status: VacationStatus.APPROVED,
     startDate: START,
     today: '2026-10-21',
+    transferPending: false,
     ...patch,
   });
 
@@ -29,6 +30,7 @@ const recall = (patch: Partial<RecallFacts> = {}) =>
     endDate: END,
     today: '2026-11-11',
     returnDate: '2026-11-12',
+    transferPending: false,
     ...patch,
   });
 
@@ -91,6 +93,28 @@ describe('cancelError: отмена владельцем', () => {
     expect(
       code(cancel({ status: VacationStatus.CANCELLED, today: START })),
     ).toBe('409 ALREADY_PROCESSED');
+  });
+});
+
+describe('cancelError: перенос ждёт решения (S6-b)', () => {
+  // RULES §5-2, §5-3: старый отпуск не отменить, пока перенос «На согласовании»
+  it('до начала - 409 PENDING_TRANSFER_BLOCKS', () => {
+    expect(code(cancel({ transferPending: true }))).toBe(
+      '409 PENDING_TRANSFER_BLOCKS',
+    );
+  });
+
+  // DECISIONS 2026-10-28 15:41: после «уже обработана», раньше «начался»
+  it('порядок: владелец и статус раньше, начало позже', () => {
+    expect(code(cancel({ actorId: 3, transferPending: true }))).toBe(
+      '403 FORBIDDEN',
+    );
+    expect(
+      code(cancel({ status: VacationStatus.REPLACED, transferPending: true })),
+    ).toBe('409 ALREADY_PROCESSED');
+    expect(code(cancel({ today: START, transferPending: true }))).toBe(
+      '409 PENDING_TRANSFER_BLOCKS',
+    );
   });
 });
 
@@ -169,5 +193,27 @@ describe('recallError: отзыв HR', () => {
     expect(
       code(recall({ today: '2026-11-20', returnDate: '2026-12-01' })),
     ).toBe('422 RECALL_FINISHED');
+  });
+});
+
+describe('recallError: перенос ждёт решения (S6-b)', () => {
+  // RULES §5-3: отозвать старый отпуск не может и HR
+  it('идущий отпуск - 409 PENDING_TRANSFER_BLOCKS', () => {
+    expect(code(recall({ transferPending: true }))).toBe(
+      '409 PENDING_TRANSFER_BLOCKS',
+    );
+  });
+
+  // DECISIONS 2026-10-28 15:41: после RECALL_FINISHED, раньше RECALL_DATE_OUT_OF_RANGE
+  it('порядок проверок', () => {
+    expect(code(recall({ today: '2026-11-14', transferPending: true }))).toBe(
+      '422 RECALL_FINISHED',
+    );
+    expect(code(recall({ today: '2026-11-08', transferPending: true }))).toBe(
+      '422 RECALL_NOT_STARTED',
+    );
+    expect(
+      code(recall({ returnDate: '2026-12-01', transferPending: true })),
+    ).toBe('409 PENDING_TRANSFER_BLOCKS');
   });
 });

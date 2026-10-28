@@ -3,6 +3,7 @@ import type { Prisma } from '../generated/prisma/client';
 import { VacationStatus } from '../generated/prisma/enums';
 import { canDecide } from '../org/policy';
 import { cancelError, recallStateError } from './cancel-rules';
+import { transferSourceError } from './vacation-rules';
 
 /** Что читается из БД для ответа: заявка, имена участников и статусы преемников (переносов). */
 export const VACATION_INCLUDE = {
@@ -60,10 +61,13 @@ export interface Viewer {
 /**
  * Подсказка интерфейсу, что разрешено зрителю сейчас; права проверяет сервер теми же правилами.
  * approve/reject - согласующему, пока заявка PENDING (RULES §4-1, §4-2); cancel - владельцу до
- * начала (§5-4); recall - HR, пока одобренный отпуск идёт (§5-5). Перенос - S6b.
+ * начала (§5-4); transfer - владельцу одобренного отпуска до начала (§5-1, §5-2); recall - HR,
+ * пока одобренный отпуск идёт (§5-5). Пока перенос ждёт решения, у старого отпуска нет ни
+ * cancel, ни transfer, ни recall (§5-2, §5-3).
  */
 export function actionsFor(row: VacationRow, viewer: Viewer): VacationAction[] {
   const actions: VacationAction[] = [];
+  const pending = transferPendingOf(row);
   if (
     row.status === VacationStatus.PENDING &&
     canDecide(viewer.id, row.employee, viewer.hrId)
@@ -77,17 +81,36 @@ export function actionsFor(row: VacationRow, viewer: Viewer): VacationAction[] {
     status: row.status,
     startDate,
     today: viewer.today,
+    transferPending: pending,
   });
   if (!cancel) actions.push('cancel');
+  const transfer = transferSourceError({
+    actorId: viewer.id,
+    employeeId: row.employeeId,
+    status: row.status,
+    startDate,
+    today: viewer.today,
+    transferPending: pending,
+  });
+  if (!transfer) actions.push('transfer');
   const recall = recallStateError({
     actorIsHr: viewer.isHr,
     status: row.status,
     startDate,
     endDate: fromDbDate(row.endDate),
     today: viewer.today,
+    transferPending: pending,
   });
   if (!recall) actions.push('recall');
   return actions;
+}
+
+/** RULES §3-11: «перенос на рассмотрении» - одобренный отпуск с преемником «На согласовании». */
+function transferPendingOf(row: VacationRow): boolean {
+  return (
+    row.status === VacationStatus.APPROVED &&
+    row.replacedBy.some((r) => r.status === VacationStatus.PENDING)
+  );
 }
 
 /** Пометки выводятся из данных (architecture §2), не хранятся. */
@@ -109,9 +132,7 @@ export function toVacationView(row: VacationRow, viewer: Viewer): VacationView {
     cancelledAt: row.cancelledAt?.toISOString() ?? null,
     returnDate: row.returnDate ? fromDbDate(row.returnDate) : null,
     // RULES §3-11: «перенос на рассмотрении»
-    transferPending:
-      row.status === VacationStatus.APPROVED &&
-      row.replacedBy.some((r) => r.status === VacationStatus.PENDING),
+    transferPending: transferPendingOf(row),
     // RULES §3-11: «Старый отпуск остаётся»
     oldVacationKept:
       row.replacesId !== null &&

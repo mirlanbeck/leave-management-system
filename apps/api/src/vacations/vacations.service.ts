@@ -25,7 +25,12 @@ import { OrgService } from '../org/org.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { cancelError, recallError, type ActionError } from './cancel-rules';
 import type { VacationScope } from './dto/list-vacations.query';
-import { evaluateSubmission } from './vacation-rules';
+import {
+  evaluateSubmission,
+  evaluateTransfer,
+  TRANSFER_MESSAGES,
+  transferSourceError,
+} from './vacation-rules';
 import {
   toVacationView,
   VACATION_INCLUDE,
@@ -40,11 +45,11 @@ const alreadyProcessed = () =>
 const toApiError = (e: ActionError) =>
   new ApiError(e.status, e.code, e.message);
 
-/** Нарушение уникального индекса возврата: второй REFUND по заявке (architecture §6 п.5). */
-function isDuplicateRefund(e: unknown): boolean {
+/** Нарушение уникального индекса с этим фрагментом имени (architecture §6 п.5). */
+function isUniqueViolation(e: unknown, index: string): boolean {
   if (!(e instanceof Prisma.PrismaClientKnownRequestError)) return false;
   if (e.code !== 'P2002') return false;
-  return JSON.stringify(e.meta ?? {}).includes('one_refund_per_vacation');
+  return JSON.stringify(e.meta ?? {}).includes(index);
 }
 
 /** Заявка и её предшественники по цепочке переносов (RULES §5-12): id по возрастанию и корень. */
@@ -154,33 +159,174 @@ export class VacationsService {
         include: VACATION_INCLUDE,
       });
 
-      // RULES §8-2, §4-2: письмо согласующему; у директора это HR («допуск HR»)
-      const approver = await this.org.approverOf(
-        { managerId: me.managerId },
-        tx,
-      );
-      await enqueueMail(
-        tx,
-        [
-          {
-            type: MailType.NEW_REQUEST,
-            vacationId: created.id,
-            recipientId: approver.id,
-            ...newRequestMail({
-              employeeName: me.fullName,
-              startDate: input.startDate,
-              endDate: input.endDate,
-              workDays,
-              backstopperName: backstopper!.fullName,
-              comment,
-              forHr: me.managerId === null,
-            }),
-          },
-        ],
-        now,
-      );
+      await this.enqueueNewRequest(tx, me, created, backstopper!.fullName, now);
       return toVacationView(created, await this.viewerOf(user, today, tx));
     });
+  }
+
+  /**
+   * Перенос одобренного отпуска до начала (RULES §5-1, §5-2): новая заявка «На согласовании» с
+   * replacesId. Порядок ошибок DECISIONS 2026-10-28 17:06. Остаток не проверяется. В одной
+   * транзакции: User сотрудника → исходный отпуск FOR NO KEY UPDATE (architecture §6), проверки,
+   * заявка, письмо согласующему как о новой заявке (§8-2).
+   */
+  async transfer(
+    user: AuthUser,
+    id: number,
+    input: SubmitInput,
+  ): Promise<VacationView> {
+    const now = await this.clock.now();
+    const today = companyToday(now, companyTz(this.env));
+    const comment = input.comment?.trim() || null;
+    const backstopperId = input.backstopperId ?? null;
+
+    const head = await this.prisma.vacation.findUnique({
+      where: { id },
+      select: { employeeId: true },
+    });
+    if (!head || !(await this.org.canSee(user, head.employeeId))) {
+      throw notFound();
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const [me] = await tx.$queryRaw<
+          { managerId: number | null; fullName: string }[]
+        >`SELECT "managerId", "fullName" FROM "User"
+          WHERE id = ${head.employeeId} FOR NO KEY UPDATE`;
+        await tx.$queryRaw`SELECT id FROM "Vacation" WHERE id = ${id} FOR NO KEY UPDATE`;
+        // перечитывание после захвата (architecture §6 п.2)
+        const source = await tx.vacation.findUniqueOrThrow({ where: { id } });
+        const state = transferSourceError({
+          actorId: user.id,
+          employeeId: source.employeeId,
+          status: source.status,
+          startDate: fromDbDate(source.startDate),
+          today,
+          transferPending: await this.hasPendingTransfer(tx, id),
+        });
+        if (state) throw toApiError(state);
+
+        const backstopper =
+          backstopperId !== null && isDbId(backstopperId)
+            ? await tx.user.findUnique({
+                where: { id: backstopperId },
+                select: { id: true, fullName: true },
+              })
+            : null;
+        // RULES §5-2: старый отпуск в проверке пересечений не участвует
+        const active = await tx.vacation.findMany({
+          where: {
+            employeeId: source.employeeId,
+            id: { not: id },
+            status: { in: [VacationStatus.PENDING, VacationStatus.APPROVED] },
+          },
+          select: { id: true, startDate: true, endDate: true },
+        });
+        const error = evaluateTransfer({
+          employeeId: source.employeeId,
+          backstopperId,
+          backstopperExists: backstopper !== null,
+          startDate: input.startDate,
+          endDate: input.endDate,
+          today,
+          sourceWorkDays: source.workDays,
+          active: active.map((v) => ({
+            id: v.id,
+            startDate: fromDbDate(v.startDate),
+            endDate: fromDbDate(v.endDate),
+          })),
+        });
+        if (error)
+          throw new ApiError(422, error.code, error.message, error.details);
+
+        const created = await tx.vacation.create({
+          data: {
+            employeeId: source.employeeId,
+            backstopperId: backstopper!.id,
+            startDate: toDbDate(input.startDate),
+            endDate: toDbDate(input.endDate),
+            workDays: source.workDays,
+            comment,
+            replacesId: id,
+            createdAt: now,
+          },
+          include: VACATION_INCLUDE,
+        });
+        await this.enqueueNewRequest(
+          tx,
+          me,
+          created,
+          backstopper!.fullName,
+          now,
+        );
+        return toVacationView(created, await this.viewerOf(user, today, tx));
+      });
+    } catch (e) {
+      // последняя линия: второй действующий преемник запрещает БД (architecture §6 п.5)
+      if (isUniqueViolation(e, 'single_live_successor')) {
+        throw new ApiError(
+          409,
+          'TRANSFER_ALREADY_PENDING',
+          TRANSFER_MESSAGES.TRANSFER_ALREADY_PENDING,
+        );
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Письмо о новой заявке согласующему (RULES §8-2, §4-2); у директора это HR («допуск HR»).
+   * Заявка-перенос - новая заявка, письмо то же (DECISIONS 2026-10-21 14:52).
+   */
+  private async enqueueNewRequest(
+    tx: Prisma.TransactionClient,
+    employee: { managerId: number | null; fullName: string },
+    created: {
+      id: number;
+      startDate: Date;
+      endDate: Date;
+      workDays: number;
+      comment: string | null;
+    },
+    backstopperName: string,
+    now: Date,
+  ): Promise<void> {
+    const approver = await this.org.approverOf(
+      { managerId: employee.managerId },
+      tx,
+    );
+    await enqueueMail(
+      tx,
+      [
+        {
+          type: MailType.NEW_REQUEST,
+          vacationId: created.id,
+          recipientId: approver.id,
+          ...newRequestMail({
+            employeeName: employee.fullName,
+            startDate: fromDbDate(created.startDate),
+            endDate: fromDbDate(created.endDate),
+            workDays: created.workDays,
+            backstopperName,
+            comment: created.comment,
+            forHr: employee.managerId === null,
+          }),
+        },
+      ],
+      now,
+    );
+  }
+
+  /** Есть ли у заявки преемник «На согласовании» (RULES §3-11, §5-2). */
+  private async hasPendingTransfer(
+    tx: Prisma.TransactionClient,
+    id: number,
+  ): Promise<boolean> {
+    const count = await tx.vacation.count({
+      where: { replacesId: id, status: VacationStatus.PENDING },
+    });
+    return count > 0;
   }
 
   /**
@@ -189,14 +335,19 @@ export class VacationsService {
    * статус. Писем нет (§8-8).
    */
   cancel(viewer: AuthUser, id: number): Promise<VacationView> {
-    return this.cancelOrRecall(viewer, id, 'EMPLOYEE', (row, today) =>
-      cancelError({
-        actorId: viewer.id,
-        employeeId: row.employeeId,
-        status: row.status,
-        startDate: fromDbDate(row.startDate),
-        today,
-      }),
+    return this.cancelOrRecall(
+      viewer,
+      id,
+      'EMPLOYEE',
+      (row, today, transferPending) =>
+        cancelError({
+          actorId: viewer.id,
+          employeeId: row.employeeId,
+          status: row.status,
+          startDate: fromDbDate(row.startDate),
+          today,
+          transferPending,
+        }),
     );
   }
 
@@ -213,7 +364,7 @@ export class VacationsService {
       viewer,
       id,
       'HR_RECALL',
-      (row, today) =>
+      (row, today, transferPending) =>
         recallError({
           actorIsHr: viewer.isHr,
           status: row.status,
@@ -221,6 +372,7 @@ export class VacationsService {
           endDate: fromDbDate(row.endDate),
           today,
           returnDate,
+          transferPending,
         }),
       returnDate,
     );
@@ -236,7 +388,11 @@ export class VacationsService {
     viewer: AuthUser,
     id: number,
     by: 'EMPLOYEE' | 'HR_RECALL',
-    check: (row: ActionRow, today: CalendarDate) => ActionError | null,
+    check: (
+      row: ActionRow,
+      today: CalendarDate,
+      transferPending: boolean,
+    ) => ActionError | null,
     returnDate?: CalendarDate,
   ): Promise<VacationView> {
     const now = await this.clock.now();
@@ -260,7 +416,8 @@ export class VacationsService {
           WHERE id IN (${Prisma.join(chain.ids)}) ORDER BY id FOR NO KEY UPDATE`;
         // перечитывание после захвата (architecture §6 п.2)
         const row = await tx.vacation.findUniqueOrThrow({ where: { id } });
-        const error = check(row, today);
+        // преемник не блокируется: все операции сотрудника идут под его строкой User
+        const error = check(row, today, await this.hasPendingTransfer(tx, id));
         if (error) throw toApiError(error);
 
         // «На согласовании» дней не списывала: возвращать нечего (RULES §5-4)
@@ -293,7 +450,9 @@ export class VacationsService {
       });
     } catch (e) {
       // последняя линия: второй возврат по заявке запрещает БД (architecture §6 п.5)
-      if (isDuplicateRefund(e)) throw alreadyProcessed();
+      if (isUniqueViolation(e, 'one_refund_per_vacation')) {
+        throw alreadyProcessed();
+      }
       throw e;
     }
 

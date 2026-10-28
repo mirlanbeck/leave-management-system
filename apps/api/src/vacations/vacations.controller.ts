@@ -67,6 +67,23 @@ export class VacationsController {
     return this.vacations.recall(user, parseVacationId(id), returnDate);
   }
 
+  /** Перенос одобренного отпуска до начала (RULES §5-1, §5-2): 201 и заявка-перенос PENDING. */
+  @Post(':id/transfer')
+  transfer(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: CreateVacationDto,
+  ): Promise<VacationView> {
+    const dates = parseApiDates({
+      startDate: body.startDate,
+      endDate: body.endDate,
+    });
+    return this.vacations.transfer(user, parseVacationId(id), {
+      ...body,
+      ...dates,
+    });
+  }
+
   @Get(':id')
   get(
     @CurrentUser() user: AuthUser,

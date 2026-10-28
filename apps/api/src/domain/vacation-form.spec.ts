@@ -1,4 +1,8 @@
-import { checkVacationForm, VacationFormInput } from './vacation-form';
+import {
+  checkPeriodShape,
+  checkVacationForm,
+  VacationFormInput,
+} from './vacation-form';
 
 // Базовый случай: сегодня среда 2026-10-21, выход давно, период в будущем.
 const base: VacationFormInput = {
@@ -238,5 +242,33 @@ describe('checkVacationForm', () => {
         'NO_ACCRUAL_YET', // RULES §3-6
       );
     });
+  });
+});
+
+describe('checkPeriodShape: проверки периода, общие для подачи и переноса', () => {
+  it('корректный период', () => {
+    expect(checkPeriodShape('2026-11-16', '2026-11-20')).toBeNull(); // RULES §3-4
+  });
+
+  it('начало позже окончания', () => {
+    expect(checkPeriodShape('2026-11-20', '2026-11-16')).toBe(
+      'VACATION_DATES_ORDER',
+    ); // RULES §3-4
+  });
+
+  it('через Новый год', () => {
+    expect(checkPeriodShape('2026-12-28', '2027-01-04')).toBe(
+      'VACATION_CROSSES_YEAR',
+    ); // RULES §3-4 «в пределах одного календарного года»
+  });
+
+  it('только выходные', () => {
+    expect(checkPeriodShape('2026-11-21', '2026-11-22')).toBe(
+      'VACATION_NO_WORK_DAYS',
+    ); // RULES §3-4 «Минимум 1 рабочий день»
+  });
+
+  it('не знает о дате выхода, начислении и «в прошлом» (перенос, RULES §3-12)', () => {
+    expect(checkPeriodShape('2020-01-06', '2020-01-10')).toBeNull(); // RULES §3-12
   });
 });

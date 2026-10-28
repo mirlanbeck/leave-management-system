@@ -529,10 +529,10 @@ describe('отмена и отзыв: POST /vacations/{id}/cancel и /recall (in
     const actionsOf = async (login: RulesOrgKey, id: number) =>
       (await get(login, `/vacations/${id}`)).body.actions;
 
-    // RULES §5-4, §5-5, §5-10, §7-2
-    it('до начала: владельцу cancel, руководителю и HR ничего', async () => {
+    // RULES §5-1, §5-4, §5-5, §5-10, §7-2: перенос владельцу до начала - S6-b
+    it('до начала: владельцу cancel и transfer, руководителю и HR ничего', async () => {
       const { id } = await vacation('employee1');
-      expect(await actionsOf('employee1', id)).toEqual(['cancel']);
+      expect(await actionsOf('employee1', id)).toEqual(['cancel', 'transfer']);
       expect(await actionsOf('manager1', id)).toEqual([]);
       expect(await actionsOf('hr', id)).toEqual([]);
     });
@@ -555,9 +555,9 @@ describe('отмена и отзыв: POST /vacations/{id}/cancel и /recall (in
     });
 
     // RULES §5-4, §5-5 (DECISIONS 2026-10-28 15:41): свой отпуск HR - cancel до начала, recall во время
-    it('свой отпуск HR: cancel до начала, recall во время', async () => {
+    it('свой отпуск HR: cancel и transfer до начала, recall во время', async () => {
       const { id } = await vacation('hr');
-      expect(await actionsOf('hr', id)).toEqual(['cancel']);
+      expect(await actionsOf('hr', id)).toEqual(['cancel', 'transfer']);
       await setDbClock(pool, DURING);
       expect(await actionsOf('hr', id)).toEqual(['recall']);
     });

@@ -1,8 +1,13 @@
 import type { BalanceInput, LedgerAction } from '../domain';
+import { VacationStatus } from '../generated/prisma/enums';
 import {
   evaluateSubmission,
+  evaluateTransfer,
   formatDays,
+  transferSourceError,
   type SubmissionInput,
+  type TransferInput,
+  type TransferSourceFacts,
 } from './vacation-rules';
 
 // Базовый случай: сегодня среда 2026-10-21, выход давно (остаток 37,5, на 2026-11-02 уже 40),
@@ -378,5 +383,197 @@ describe('formatDays', () => {
     [-0.5, '−0,5'],
   ])('%p -> %s', (days, text) => {
     expect(formatDays(days)).toBe(text);
+  });
+});
+
+// Перенос (S6-b): исходный отпуск пн 2026-11-09 – пт 2026-11-13 (5 раб. дней), сегодня 2026-10-21.
+const source = (patch: Partial<TransferSourceFacts> = {}) =>
+  transferSourceError({
+    actorId: EMPLOYEE,
+    employeeId: EMPLOYEE,
+    status: VacationStatus.APPROVED,
+    startDate: '2026-11-09',
+    today: '2026-10-21',
+    transferPending: false,
+    ...patch,
+  });
+const sourceCode = (patch: Partial<TransferSourceFacts> = {}) => {
+  const e = source(patch);
+  return e && `${e.status} ${e.code}`;
+};
+
+describe('transferSourceError: можно ли переносить отпуск', () => {
+  // RULES §5-1, §5-2: одобренный отпуск до начала
+  it('одобренный до начала - можно; накануне начала тоже', () => {
+    expect(source()).toBeNull();
+    expect(source({ today: '2026-11-08' })).toBeNull();
+  });
+
+  // RULES §5-2: перенос подаётся из своего отпуска
+  it('не владелец - 403 FORBIDDEN', () => {
+    expect(sourceCode({ actorId: 3 })).toBe('403 FORBIDDEN');
+  });
+
+  // RULES §10-1; DECISIONS 2026-10-28 17:06
+  it.each([VacationStatus.CANCELLED, VacationStatus.REPLACED])(
+    '%s - 409 ALREADY_PROCESSED',
+    (status) => {
+      expect(sourceCode({ status })).toBe('409 ALREADY_PROCESSED');
+    },
+  );
+
+  // RULES §5-2: переносится только одобренный отпуск
+  it.each([VacationStatus.PENDING, VacationStatus.REJECTED])(
+    '%s - 422 TRANSFER_SOURCE_NOT_APPROVED',
+    (status) => {
+      expect(sourceCode({ status })).toBe('422 TRANSFER_SOURCE_NOT_APPROVED');
+    },
+  );
+
+  // RULES §5-2 «недоступны «Отменить» и «Перенести»: сначала отменяется перенос»
+  it('перенос уже ждёт решения - 409 TRANSFER_ALREADY_PENDING', () => {
+    expect(source({ transferPending: true })).toEqual({
+      status: 409,
+      code: 'TRANSFER_ALREADY_PENDING',
+      message:
+        'Перенос этого отпуска уже ждёт решения; повторно перенести отпуск нельзя',
+    });
+  });
+
+  // RULES §5-1, §5-9: начался, если сегодня ≥ даты начала
+  it('в день начала и позже - 422 TRANSFER_STARTED', () => {
+    expect(source({ today: '2026-11-09' })).toEqual({
+      status: 422,
+      code: 'TRANSFER_STARTED',
+      message: 'Отпуск уже начался, перенести его нельзя',
+    });
+    expect(sourceCode({ today: '2026-11-20' })).toBe('422 TRANSFER_STARTED');
+  });
+
+  // DECISIONS 2026-10-28 17:06: порядок проверок состояния
+  it('порядок проверок', () => {
+    expect(sourceCode({ actorId: 3, status: VacationStatus.REPLACED })).toBe(
+      '403 FORBIDDEN',
+    );
+    expect(
+      sourceCode({ status: VacationStatus.REPLACED, today: '2026-11-20' }),
+    ).toBe('409 ALREADY_PROCESSED');
+    expect(
+      sourceCode({ status: VacationStatus.PENDING, today: '2026-11-20' }),
+    ).toBe('422 TRANSFER_SOURCE_NOT_APPROVED');
+    expect(sourceCode({ transferPending: true, today: '2026-11-20' })).toBe(
+      '409 TRANSFER_ALREADY_PENDING',
+    );
+  });
+});
+
+const transferBase: TransferInput = {
+  employeeId: EMPLOYEE,
+  backstopperId: 20,
+  backstopperExists: true,
+  startDate: '2026-11-16',
+  endDate: '2026-11-20',
+  today: '2026-10-21',
+  sourceWorkDays: 5,
+  active: [],
+};
+const transfer = (patch: Partial<TransferInput>) =>
+  evaluateTransfer({ ...transferBase, ...patch });
+const transferCode = (patch: Partial<TransferInput>) => transfer(patch)?.code;
+
+describe('evaluateTransfer: новые даты переноса', () => {
+  // RULES §5-2
+  it('те же рабочие дни, начало в будущем - проходит', () => {
+    expect(transfer({})).toBeNull();
+  });
+
+  // RULES §5-2 «начало сегодня допустимо»
+  it('начало сегодня - проходит; вчера - TRANSFER_START_IN_PAST', () => {
+    expect(
+      transfer({ startDate: '2026-10-21', endDate: '2026-10-27' }),
+    ).toBeNull();
+    expect(
+      transfer({ startDate: '2026-10-20', endDate: '2026-10-26' }),
+    ).toEqual({
+      code: 'TRANSFER_START_IN_PAST',
+      message:
+        'Начало переноса не может быть раньше сегодняшней даты; для прошлых дат подайте обычную заявку',
+    });
+  });
+
+  // RULES §5-2: число рабочих дней должно совпасть
+  it('другое число рабочих дней - TRANSFER_WORKDAYS_MISMATCH с объяснением', () => {
+    expect(transfer({ endDate: '2026-11-19' })).toEqual({
+      code: 'TRANSFER_WORKDAYS_MISMATCH',
+      message: 'Число рабочих дней должно совпадать: было 5, в заявке 4',
+      details: { old: 5, requested: 4 },
+    });
+  });
+
+  // RULES §3-2, §3-3, §5-2: backstopper обязателен и для переноса
+  it.each([
+    ['не указан', { backstopperId: null }, 'BACKSTOPPER_REQUIRED'],
+    ['undefined', { backstopperId: undefined }, 'BACKSTOPPER_REQUIRED'],
+    ['сам заявитель', { backstopperId: EMPLOYEE }, 'BACKSTOPPER_IS_SELF'],
+    ['не найден', { backstopperExists: false }, 'BACKSTOPPER_NOT_FOUND'],
+  ] as [string, Partial<TransferInput>, string][])(
+    'backstopper %s - %s',
+    (_name, patch, expected) => {
+      expect(transferCode(patch)).toBe(expected);
+    },
+  );
+
+  // RULES §3-4, §5-2: перенос подчиняется правилам дробления
+  it.each([
+    [
+      'начало позже окончания',
+      '2026-11-20',
+      '2026-11-16',
+      'VACATION_DATES_ORDER',
+    ],
+    ['через Новый год', '2026-12-28', '2027-01-01', 'VACATION_CROSSES_YEAR'],
+    ['только выходные', '2026-11-21', '2026-11-22', 'VACATION_NO_WORK_DAYS'],
+  ])('%s - %s', (_name, startDate, endDate, expected) => {
+    expect(transferCode({ startDate, endDate })).toBe(expected);
+  });
+
+  // RULES §5-2: с другими заявками сотрудника пересечение запрещено
+  it('пересечение с другой активной заявкой - VACATION_OVERLAP', () => {
+    expect(
+      transfer({
+        active: [{ id: 7, startDate: '2026-11-19', endDate: '2026-11-24' }],
+      }),
+    ).toEqual({
+      code: 'VACATION_OVERLAP',
+      message: 'У вас уже есть заявка на эти даты: с 2026-11-19 по 2026-11-24',
+      details: { vacationId: 7, from: '2026-11-19', to: '2026-11-24' },
+    });
+  });
+
+  // DECISIONS 2026-10-28 17:06: backstopper → период → начало → рабочие дни → пересечение
+  it('порядок проверок', () => {
+    const everywhere = [
+      { id: 7, startDate: '2026-01-01', endDate: '2026-12-31' },
+    ];
+    expect(
+      transferCode({
+        backstopperId: null,
+        startDate: '2026-11-20',
+        endDate: '2026-11-16',
+      }),
+    ).toBe('BACKSTOPPER_REQUIRED');
+    expect(
+      transferCode({ startDate: '2026-10-17', endDate: '2026-10-18' }),
+    ).toBe('VACATION_NO_WORK_DAYS');
+    expect(
+      transferCode({
+        startDate: '2026-10-19',
+        endDate: '2026-10-19',
+        active: everywhere,
+      }),
+    ).toBe('TRANSFER_START_IN_PAST');
+    expect(transferCode({ endDate: '2026-11-19', active: everywhere })).toBe(
+      'TRANSFER_WORKDAYS_MISMATCH',
+    );
   });
 });
