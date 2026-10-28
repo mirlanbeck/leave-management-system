@@ -1,37 +1,15 @@
-import type { APIRequestContext } from '@playwright/test';
 import { test, expect } from './fixtures';
-import { PASSWORD, waitForSettledInbox } from './helpers';
+import { email, submitViaApi, waitForSettledInbox } from './helpers';
 
 // Доставка писем диспетчером outbox через настоящий Mailpit (S4-b, issue #38; DECISIONS [S4]:
 // эта проверка живёт в e2e, integration-тесты диспетчера идут с подменным транспортом).
-const email = (login: string) => `${login}@vacation.local`;
-
-async function token(request: APIRequestContext, login: string): Promise<string> {
-  const res = await request.post('/api/auth/login', { data: { login, password: PASSWORD } });
-  expect(res.status()).toBe(200);
-  return ((await res.json()) as { accessToken: string }).accessToken;
-}
-
-/** Подаёт заявку через API (форма заявки - S4-c); e2e:reset ставит часы на 2026-10-21. */
-async function submit(request: APIRequestContext, login: string, backstopperName: string) {
-  const auth = { Authorization: `Bearer ${await token(request, login)}` };
-  const employees = (await (await request.get('/api/employees', { headers: auth })).json()) as {
-    id: number;
-    fullName: string;
-  }[];
-  const backstopper = employees.find((e) => e.fullName === backstopperName);
-  expect(backstopper).toBeDefined();
-  const res = await request.post('/api/vacations', {
-    headers: auth,
-    data: { startDate: '2026-11-02', endDate: '2026-11-06', backstopperId: backstopper!.id },
-  });
-  expect(res.status()).toBe(201);
-}
+// Заявка подаётся через API (форма заявки - S4-c); e2e:reset ставит часы на 2026-10-21.
+const NOV_2_6 = { startDate: '2026-11-02', endDate: '2026-11-06' };
 
 test.describe('S4-b: письма через диспетчер outbox и Mailpit', () => {
   // RULES §8-2, §10-1: новая заявка - одно письмо руководителю
   test('заявка сотрудника: в Mailpit ровно одно письмо руководителю', async ({ request }) => {
-    await submit(request, 'james', 'Sophie Bennett');
+    await submitViaApi(request, 'james', { ...NOV_2_6, backstopper: 'Sophie Bennett' });
 
     const messages = await waitForSettledInbox(request);
 
@@ -42,7 +20,7 @@ test.describe('S4-b: письма через диспетчер outbox и Mailpi
 
   // RULES §8-2: заявка директора - письмо HR («допуск HR»); §3-2: backstopper писем не получает
   test('заявка директора: одно письмо HR, backstopper писем не получает', async ({ request }) => {
-    await submit(request, 'margaret', 'Thomas Reed');
+    await submitViaApi(request, 'margaret', { ...NOV_2_6, backstopper: 'Thomas Reed' });
 
     const messages = await waitForSettledInbox(request);
 
