@@ -407,7 +407,6 @@ canSee(viewer, employeeId) = employeeId ∈ scope(viewer)
 | `GET /clock`, `PUT /clock` | любой вошедший, **только при `DEMO_MODE`**, иначе `404` | §9-2, §9-3 | S3 |
 | `GET /employees` | любой | §3-3 | S4 |
 | `GET /me/balance` | любой | §3-10, §7-2 | S4 |
-| `GET /employees/{id}/balance` | руководитель (подчинённые), HR (все) | §7-2 | не используется (DECISIONS 2026-10-28 00:58) |
 | `POST /vacations` | любой, у кого уже есть начисление | §3, §10-1 | S4 |
 | `GET /vacations` | любой (`mine`); руководитель (`team`); HR (`all`) | §7-2 | S4 |
 | `GET /vacations/{id}` | видимость `canSee` | §7-2 | S4 |
@@ -557,21 +556,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Balance" }
-  /employees/{id}/balance:
-    get:
-      deprecated: true   # не реализован: потребителя нет, остатки дают ApprovalItem и Calendar (DECISIONS 2026-10-28 00:58)
-      tags: [balance]
-      summary: Остаток сотрудника (руководитель - подчинённые, HR - все)
-      parameters:
-        - { $ref: "#/components/parameters/Id" }
-        - { name: on, in: query, required: false, schema: { type: string, format: date } }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Balance" }
-        "404": { $ref: "#/components/responses/Problem" }
   /vacations:
     post:
       tags: [vacations]
