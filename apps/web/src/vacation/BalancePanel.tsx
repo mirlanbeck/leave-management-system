@@ -19,8 +19,8 @@ function Days({ value, testId }: { value: number; testId: string }) {
  * Единственное место, где сотрудник видит свой остаток: «сегодня» и «доступно на дату»
  * (RULES §3-10; DECISIONS 2026-10-22 12:15, 2026-10-26 00:43). Оба числа и «сегодня» даёт сервер.
  */
-export function BalancePanel(props: { on: string; onChangeOn: (on: string) => void }) {
-  const { on, onChangeOn } = props;
+export function BalancePanel(props: { on: string; onChangeOn: (on: string) => void; reloadKey?: number }) {
+  const { on, onChangeOn, reloadKey = 0 } = props;
   const [balance, setBalance] = useState<Balance | null>(null);
   const [error, setError] = useState<ApiProblem | null>(null);
   const take = useMemo(() => latestOnly(), []);
@@ -37,7 +37,7 @@ export function BalancePanel(props: { on: string; onChangeOn: (on: string) => vo
       .catch((e: unknown) => {
         if (isLatest()) setError(toProblem(e));
       });
-  }, [on, take]);
+  }, [on, reloadKey, take]); // reloadKey: перечитать после отмены (RULES §5-4)
 
   return (
     <section className="panel" aria-label="Остаток дней">

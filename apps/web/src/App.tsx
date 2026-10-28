@@ -6,7 +6,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { VacationPage } from './pages/VacationPage';
 import { ApprovalsPage } from './pages/ApprovalsPage';
 import { CalendarPage } from './pages/CalendarPage';
-import { HrPage } from './pages/StubPages';
+import { HrPage } from './pages/HrPage';
 import { RequireAuth, RequireRole } from './routes/guards';
 
 export function App() {
