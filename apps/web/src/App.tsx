@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { VacationPage } from './pages/VacationPage';
 import { ApprovalsPage } from './pages/ApprovalsPage';
+import { CalendarPage } from './pages/CalendarPage';
 import { HrPage } from './pages/StubPages';
 import { RequireAuth, RequireRole } from './routes/guards';
 
@@ -20,6 +21,7 @@ export function App() {
             <Route element={<RequireRole route="approvals" />}>
               <Route path="approvals" element={<ApprovalsPage />} />
             </Route>
+            <Route path="calendar" element={<CalendarPage />} />
             <Route element={<RequireRole route="hr" />}>
               <Route path="hr" element={<HrPage />} />
             </Route>
