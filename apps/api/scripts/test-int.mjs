@@ -2,7 +2,9 @@
 // тесты делают TRUNCATE и не должны стирать демо-данные запущенного стека.
 // БД создаётся при отсутствии (подходит и для существующего тома Postgres), затем миграции и jest.
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import pg from 'pg';
+import { buildJestArgs } from './test-int-args.mjs';
 
 const url = new URL(
   process.env.TEST_DATABASE_URL ??
@@ -47,7 +49,13 @@ const run = (cmd) => {
 
 run('npx prisma generate');
 run('npx prisma migrate deploy');
-const extra = process.argv.slice(2).join(' ');
-run(
-  `npx jest --runInBand --testTimeout=30000 --testRegex "\\.int\\.spec\\.ts$" ${extra}`,
+// jest без оболочки: аргументы массивом, значение вроде -t "два слова" не разбивается
+const jest = spawnSync(
+  process.execPath,
+  [
+    createRequire(import.meta.url).resolve('jest/bin/jest'),
+    ...buildJestArgs(process.argv.slice(2)),
+  ],
+  { env, stdio: 'inherit' },
 );
+process.exit(jest.status ?? 1);
