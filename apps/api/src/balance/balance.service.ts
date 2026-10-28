@@ -83,6 +83,14 @@ export class BalanceService {
     return availableOn(await this.input(employee, today, db), on) / 2;
   }
 
+  /** «Баланс сегодня» в днях (RULES §6-6): тот же расчёт, что `balance` у `/me/balance`. */
+  async balanceTodayDays(
+    employee: Pick<AuthUser, 'id' | 'hireDate'>,
+    today: CalendarDate,
+  ): Promise<number> {
+    return balanceToday(await this.input(employee, today)) / 2;
+  }
+
   /** Остаток на сегодня и, если задана дата `on` (уже проверенная), «доступно на дату». */
   async view(
     employee: Pick<AuthUser, 'id' | 'hireDate'>,

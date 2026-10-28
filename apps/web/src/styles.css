@@ -153,3 +153,46 @@ dd {
   text-align: left;
   border-bottom: 1px solid #d9dde3;
 }
+/* Календарь: сетка месяца, выходные затенены, дни отпуска закрашены */
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.calendar-nav h2 {
+  margin: 0;
+  min-width: 10rem;
+  text-align: center;
+  font-size: 1.1rem;
+}
+.calendar-scroll {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+.calendar-grid {
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 0.8rem;
+}
+.calendar-grid th,
+.calendar-grid td {
+  border: 1px solid #d9dde3;
+  min-width: 1.5rem;
+  height: 1.75rem;
+  padding: 0 0.15rem;
+  text-align: center;
+}
+.calendar-grid th[scope='row'] {
+  text-align: left;
+  white-space: nowrap;
+  padding-right: 0.5rem;
+}
+.calendar-grid .weekend {
+  background: #eef0f3;
+}
+.calendar-grid td.on-vacation {
+  background: #4c7cc4;
+}
+.calendar-entries {
+  padding-left: 1.25rem;
+}

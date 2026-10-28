@@ -83,6 +83,27 @@ export interface ApprovalItem {
   blockReason: { statusCode: number; code: string; message: string } | null;
 }
 
+/** Одобренный отпуск в календаре (architecture §7, Calendar.entries); даты полные. */
+export interface CalendarEntry {
+  vacationId: number;
+  employee: EmployeeRef;
+  teamName: string | null;
+  startDate: string;
+  endDate: string;
+}
+
+/** Остаток прямого подчинённого на сегодня (Calendar.balances, только у руководителя). */
+export interface CalendarBalance {
+  employee: EmployeeRef;
+  balance: number;
+}
+
+/** GET /calendar?from&to: только «Одобрена», по видимости зрителя (RULES §7-2). */
+export interface Calendar {
+  entries: CalendarEntry[];
+  balances?: CalendarBalance[];
+}
+
 export interface LoginResult {
   accessToken: string;
   expiresAt: string;
