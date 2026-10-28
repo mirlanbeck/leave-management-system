@@ -22,15 +22,15 @@ export function VacationPage() {
     setReloadKey((k) => k + 1); // «Мои заявки» перечитываются после подачи
   }
 
-  // после отмены перечитываются «Мои заявки» и остаток (RULES §5-4)
-  const cancelled = () => setReloadKey((k) => k + 1);
+  // после отмены и переноса перечитываются «Мои заявки» и остаток (RULES §5-2, §5-4)
+  const changed = () => setReloadKey((k) => k + 1);
 
   return (
     <section>
       <h1>Отпуск</h1>
       <BalancePanel on={on} onChangeOn={setOn} reloadKey={reloadKey} />
       <VacationForm values={form} onChange={changeForm} onSubmitted={submitted} />
-      <MyRequests reloadKey={reloadKey} onCancelled={cancelled} />
+      <MyRequests reloadKey={reloadKey} onChanged={changed} />
     </section>
   );
 }

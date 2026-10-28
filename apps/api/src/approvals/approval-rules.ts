@@ -1,6 +1,7 @@
 // Правила согласования (RULES §4) без БД и Nest. Факты собирает ApprovalsService под блокировкой.
 import { MESSAGES } from '../common/problem';
 import { compareDates, type CalendarDate } from '../domain';
+import { hasStarted } from '../vacations/cancel-rules';
 import { canDecide, type OrgUser } from '../org/policy';
 import { formatDays } from '../vacations/vacation-rules';
 
@@ -83,5 +84,21 @@ export function approveBlock(
     code: 'APPROVE_INSUFFICIENT_BALANCE',
     message: `Согласовать нельзя: осталось ${formatDays(available)} дней, в заявке ${formatDays(requested)}`,
     details: { available, requested },
+  };
+}
+
+/**
+ * Перенос нельзя утвердить, если старый отпуск уже начался (сегодня ≥ его даты начала по часам
+ * компании); отклонить можно (RULES §5-2; DECISIONS 2026-10-22 12:15).
+ */
+export function transferApproveBlock(
+  sourceStartDate: CalendarDate,
+  today: CalendarDate,
+): ApprovalError | null {
+  if (!hasStarted(sourceStartDate, today)) return null;
+  return {
+    status: 422,
+    code: 'TRANSFER_APPROVE_AFTER_START',
+    message: 'Старый отпуск уже начался: перенос можно только отклонить',
   };
 }

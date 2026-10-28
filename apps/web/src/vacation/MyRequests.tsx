@@ -7,25 +7,31 @@ import { ErrorBox } from '../components/ErrorBox';
 import { formatHireDate as formatDate } from '../profile/format';
 import { latestOnly } from './balance-logic';
 import { canCancel, cancelConfirmText, cancelSuccessText } from './cancel-logic';
-import { statusLabel } from './status';
+import { statusWithMarks } from './status';
+import { canTransfer, transferSuccessText } from './transfer-logic';
+import { TransferForm } from './TransferForm';
 
 interface Props {
   reloadKey: number;
   /**
-   * Есть - в строках «Отменить» (RULES §5-4), после отмены вызывается, чтобы страница перечитала
-   * список и остаток. Нет - список только для чтения (раздел HR на «Согласовании», DECISIONS [S5]).
+   * Есть - в строках «Отменить» (RULES §5-4) и «Перенести» (§5-2); после отмены или переноса
+   * вызывается, чтобы страница перечитала список и остаток. Нет - список только для чтения
+   * (раздел HR на «Согласовании», DECISIONS [S5], 2026-10-28 16:17).
    */
-  onCancelled?: () => void;
+  onChanged?: () => void;
 }
 
+/** Что открыто в строке: подтверждение отмены или форма переноса (одно за раз). */
+type Open = { id: number; kind: 'cancel' | 'transfer' } | null;
+
 /**
- * Заявки вошедшего: даты, рабочие дни, статус по-русски (RULES §3-11).
+ * Заявки вошедшего: даты, рабочие дни, статус по-русски с пометками переноса (RULES §3-11).
  * Порядок как у сервера, новые первыми (DECISIONS 2026-10-26 10:47). Смена reloadKey перечитывает список.
  */
-export function MyRequests({ reloadKey, onCancelled }: Props) {
+export function MyRequests({ reloadKey, onChanged }: Props) {
   const [items, setItems] = useState<Vacation[] | null>(null);
   const [error, setError] = useState<ApiProblem | null>(null);
-  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [open, setOpen] = useState<Open>(null);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<DecisionOutcome | null>(null);
   const take = useMemo(() => latestOnly(), []);
@@ -47,24 +53,32 @@ export function MyRequests({ reloadKey, onCancelled }: Props) {
 
   // одна отмена за раз, повторный клик запрос не шлёт (RULES §10-1)
   function cancel(v: Vacation) {
-    if (!onCancelled) return;
+    if (!onChanged) return;
     void guard(async () => {
       setBusy(true);
       try {
         const result = await decideThenReload(
           () => api.post(`/vacations/${v.id}/cancel`, {}),
-          onCancelled,
+          onChanged,
           cancelSuccessText(v),
         );
         setOutcome(result);
-        setConfirmId(null);
+        setOpen(null);
       } finally {
         setBusy(false);
       }
     });
   }
 
-  const withActions = onCancelled !== undefined;
+  // перенос подан: итог над таблицей, форма закрывается, список и остаток перечитываются
+  function transferred(created: Vacation) {
+    setOutcome({ tone: 'ok', text: transferSuccessText(created) });
+    setOpen(null);
+    onChanged?.();
+  }
+
+  const withActions = onChanged !== undefined;
+  const isOpen = (v: Vacation, kind: 'cancel' | 'transfer') => open?.id === v.id && open.kind === kind;
 
   return (
     <section className="panel" aria-label="Мои заявки">
@@ -97,26 +111,38 @@ export function MyRequests({ reloadKey, onCancelled }: Props) {
                 <td>{formatDate(v.startDate)}</td>
                 <td>{formatDate(v.endDate)}</td>
                 <td>{v.workDays}</td>
-                <td>{statusLabel(v.status)}</td>
+                <td data-testid="my-request-status">{statusWithMarks(v)}</td>
                 {withActions && (
                   <td>
-                    {canCancel(v) && confirmId !== v.id && (
-                      <button type="button" disabled={busy} onClick={() => setConfirmId(v.id)}>
-                        Отменить
-                      </button>
+                    {open?.id !== v.id && (
+                      <div className="decision-buttons">
+                        {canCancel(v) && (
+                          <button type="button" disabled={busy} onClick={() => setOpen({ id: v.id, kind: 'cancel' })}>
+                            Отменить
+                          </button>
+                        )}
+                        {canTransfer(v) && (
+                          <button type="button" disabled={busy} onClick={() => setOpen({ id: v.id, kind: 'transfer' })}>
+                            Перенести
+                          </button>
+                        )}
+                      </div>
                     )}
-                    {canCancel(v) && confirmId === v.id && (
+                    {canCancel(v) && isOpen(v, 'cancel') && (
                       <div className="confirm" data-testid="cancel-confirm">
                         <span>{cancelConfirmText(v)}</span>
                         <div className="decision-buttons">
                           <button type="button" disabled={busy} onClick={() => cancel(v)}>
                             Да, отменить
                           </button>
-                          <button type="button" disabled={busy} onClick={() => setConfirmId(null)}>
+                          <button type="button" disabled={busy} onClick={() => setOpen(null)}>
                             Не отменять
                           </button>
                         </div>
                       </div>
+                    )}
+                    {canTransfer(v) && isOpen(v, 'transfer') && (
+                      <TransferForm vacation={v} onTransferred={transferred} onClose={() => setOpen(null)} />
                     )}
                   </td>
                 )}

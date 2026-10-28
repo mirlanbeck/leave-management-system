@@ -6,8 +6,8 @@ import { decideThenReload, oneAtATime, type DecisionOutcome } from '../approvals
 import { ErrorBox } from '../components/ErrorBox';
 import { formatHireDate as formatDate } from '../profile/format';
 import { latestOnly } from '../vacation/balance-logic';
-import { statusLabel } from '../vacation/status';
-import { canRecall, marksText, recallBody, recallSuccessText } from './hr-logic';
+import { marksText, statusLabel } from '../vacation/status';
+import { canRecall, recallBody, recallSuccessText } from './hr-logic';
 import { RecallForm } from './RecallForm';
 
 /**

@@ -11,6 +11,7 @@ import {
   overlapText,
   periodText,
   successText,
+  transferLabel,
   type DecisionKind,
   type DecisionOutcome,
 } from './approval-logic';
@@ -33,6 +34,7 @@ export function ApprovalCard({ item, onReload, onOutcome }: Props) {
   const buttons = decisionButtons(item, busy);
   const available = availableText(item.availableOnStart);
   const overlaps = overlapText(item.overlaps);
+  const transfer = transferLabel(v);
   const commentId = `decision-comment-${v.id}`;
 
   function decide(kind: DecisionKind) {
@@ -53,6 +55,11 @@ export function ApprovalCard({ item, onReload, onOutcome }: Props) {
 
   return (
     <article className="panel approval" data-testid="approval-card" aria-label={`Заявка ${v.employee.fullName}`}>
+      {transfer && (
+        <p className="notice" data-testid="approval-transfer">
+          {transfer}
+        </p>
+      )}
       <dl>
         <dt>Сотрудник</dt>
         <dd data-testid="approval-employee">{v.employee.fullName}</dd>

@@ -102,6 +102,28 @@ export async function decideViaApi(
   expect(res.status()).toBe(200);
 }
 
+/**
+ * Перенос одобренного отпуска от имени владельца (POST /vacations/{id}/transfer, ожидается 201):
+ * backstopper прежний, как подставляет форма (RULES §5-2). Возвращает id заявки-переноса.
+ */
+export async function transferViaApi(
+  request: APIRequestContext,
+  login: string,
+  vacationId: number,
+  dates: { startDate: string; endDate: string },
+): Promise<number> {
+  const headers = await authHeaders(request, login);
+  const source = (await (await request.get(`/api/vacations/${vacationId}`, { headers })).json()) as {
+    backstopper: { id: number };
+  };
+  const res = await request.post(`/api/vacations/${vacationId}/transfer`, {
+    headers,
+    data: { ...dates, backstopperId: source.backstopper.id },
+  });
+  expect(res.status()).toBe(201);
+  return ((await res.json()) as { id: number }).id;
+}
+
 /** Ставит демо-часы формой в шапке, как пользователь (RULES §9-3); время по умолчанию 09:00. */
 export async function setDemoClock(page: Page, date: string, time = '09:00') {
   await page.getByLabel('Дата', { exact: true }).fill(date);

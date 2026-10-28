@@ -24,18 +24,20 @@ export const CANCEL_MESSAGES = {
   RECALL_FINISHED: 'Отпуск уже закончился: отозвать из него нельзя',
   RECALL_DATE_OUT_OF_RANGE:
     'Дата выхода должна быть между датой начала и датой окончания отпуска включительно',
+  PENDING_TRANSFER_BLOCKS:
+    'Пока перенос ждёт решения, отпуск нельзя отменить или отозвать: сначала отмените перенос',
 } as const;
 
 const fail = (
   status: number,
   code: keyof typeof CANCEL_MESSAGES,
 ): ActionError => ({ status, code, message: CANCEL_MESSAGES[code] });
-const forbidden = (): ActionError => ({
+export const forbidden = (): ActionError => ({
   status: 403,
   code: 'FORBIDDEN',
   message: COMMON.FORBIDDEN,
 });
-const alreadyProcessed = (): ActionError => ({
+export const alreadyProcessed = (): ActionError => ({
   status: 409,
   code: 'ALREADY_PROCESSED',
   message: COMMON.ALREADY_PROCESSED,
@@ -51,11 +53,14 @@ export interface CancelFacts {
   status: VacationStatus;
   startDate: CalendarDate;
   today: CalendarDate;
+  /** Есть заявка-перенос этой заявки «На согласовании» (RULES §3-11). */
+  transferPending: boolean;
 }
 
 /**
  * Отмена владельцем до начала (RULES §5-4, §5-7, §5-10). Порядок проверок DECISIONS
- * 2026-10-28 15:41: не владелец → уже обработана → начался. HR над своим отпуском - владелец.
+ * 2026-10-28 15:41: не владелец → уже обработана → ждёт перенос → начался. HR над своим
+ * отпуском - владелец.
  */
 export function cancelError(f: CancelFacts): ActionError | null {
   if (f.actorId !== f.employeeId) return forbidden();
@@ -65,6 +70,8 @@ export function cancelError(f: CancelFacts): ActionError | null {
   ) {
     return alreadyProcessed();
   }
+  // RULES §5-2, §5-3: сначала отменяется перенос, затем, при необходимости, сам отпуск
+  if (f.transferPending) return fail(409, 'PENDING_TRANSFER_BLOCKS');
   if (hasStarted(f.startDate, f.today)) {
     return f.status === VacationStatus.APPROVED
       ? fail(403, 'CANCEL_STARTED_BY_EMPLOYEE')
@@ -80,6 +87,8 @@ export interface RecallFacts {
   endDate: CalendarDate;
   today: CalendarDate;
   returnDate: CalendarDate;
+  /** Есть заявка-перенос этой заявки «На согласовании» (RULES §3-11). */
+  transferPending: boolean;
 }
 
 /** Состояние отпуска без даты выхода: можно ли отзывать его сейчас (для `actions`). */
@@ -98,12 +107,15 @@ export function recallStateError(
   }
   if (!hasStarted(f.startDate, f.today)) return fail(422, 'RECALL_NOT_STARTED');
   if (compareDates(f.today, f.endDate) > 0) return fail(422, 'RECALL_FINISHED');
+  // RULES §5-3: запрет действует и для HR, в том числе в начавшемся отпуске
+  if (f.transferPending) return fail(409, 'PENDING_TRANSFER_BLOCKS');
   return null;
 }
 
 /**
  * Отзыв HR из идущего отпуска (RULES §5-5, §5-11). Порядок DECISIONS 2026-10-28 15:41:
- * не HR → уже обработана → не одобрена → не начался → закончился → дата выхода вне отпуска.
+ * не HR → уже обработана → не одобрена → не начался → закончился → ждёт перенос → дата выхода
+ * вне отпуска.
  * Свой отпуск HR отзывает так же (DECISIONS 2026-10-28 15:41).
  */
 export function recallError(f: RecallFacts): ActionError | null {
