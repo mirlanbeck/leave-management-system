@@ -263,6 +263,9 @@ flowchart TD
   approvals --> org
   calendar --> org
   calendar --> balance
+  hr --> org
+  hr --> balance
+  hr --> events
   events --> org
   scheduler --> mail
   scheduler --> balance
@@ -277,13 +280,14 @@ flowchart TD
 |---|---|---|---|---|
 | **clock** | единственный источник «сейчас»; демо-часы в БД; установка часов | `ClockState` | `await Clock.now()`, `DbClock.set(instant)`, `companyToday(now, tz): YYYY-MM-DD` по `COMPANY_TZ` | S0, S3 |
 | **auth** | вход по логину и паролю, JWT (8 ч, системные часы), guard, признак `accessGranted` | — (читает/пишет `User`) | `login()`, `JwtGuard`, `@Roles()` | S3 |
-| **org** | структура: руководитель, подчинённые, роли, `approverOf`, `visibleTo`, справочник | `User` | `rolesOf(user)`, `approverOf(employee)`, `visibleTo(viewer)`, `canSee(viewer, employeeId)`, `directory()` | S3 |
+| **org** | структура: руководитель, подчинённые, роли, `approverOf`, `visibleTo`, справочник, дата выхода | `User` | `rolesOf(user)`, `approverOf(employee)`, `visibleTo(viewer)`, `canSee(viewer, employeeId)`, `directory()`, `roster()`, `setHireDate(id, date)` | S3, S6c |
 | **balance** | журнал и баланс: чтение свёртки, запись списания и возврата | `LedgerEntry` | `balanceToday(employee)`, `availableOn(employee, D)`, `debit(tx, vacation)`, `refund(tx, vacation, halfDays)` | S2, S4–S6 |
 | **vacations** | подача, статусы, отмена, отзыв, перенос, списки по видимости | `Vacation` | `submit()`, `cancel()`, `recall()`, `submitTransfer()`, `list(viewer)`, `get(viewer, id)` | S4, S6 |
 | **approvals** | экран и решение согласующего, повторная проверка остатка, предупреждения о пересечениях | — | `pending(approver)`, `approve()`, `reject()`, `overlapWarnings()` | S5 |
 | **mail/outbox** | постановка писем в очередь в транзакции, диспетчер отправки и повторов | `OutboxMessage` | `enqueue(tx, message)`, `Dispatcher` (по системным часам) | S4 |
 | **scheduler** | напоминания: идемпотентный проход по Clock, создаёт только строки outbox | — | `pass()` | S7 |
 | **calendar** | read-model календаря: только `APPROVED`, по `visibleTo` | — | `calendar(viewer, from, to)` | S5 |
+| **hr** | экран HR «Остатки по сотрудникам» и смена даты выхода; таблицу `User` пишет через `org` | — | `balances(viewer)`, `changeHireDate(viewer, id, date)` | S6c |
 | **events** | шина доменных событий и SSE-эндпоинт | — | `publish(event)`, `GET /events` | контракт S1; шина S5; SSE S8 |
 
 Правила взаимодействия:
@@ -415,8 +419,8 @@ canSee(viewer, employeeId) = employeeId ∈ scope(viewer)
 | `POST /vacations/{id}/cancel` | владелец (в том числе HR над своим), до начала | §5-4, §5-7, §5-10 | S6a |
 | `POST /vacations/{id}/recall` | HR (в том числе над своим), пока отпуск идёт | §5-5, §5-11 | S6a |
 | `POST /vacations/{id}/transfer` | владелец, до начала | §5-1, §5-2 | S6 |
-| `GET /hr/balances` | HR | §7-2 | S6 |
-| `PATCH /employees/{id}/hire-date` | HR | §6-1 | S6 |
+| `GET /hr/balances` | HR | §7-2 | S6c |
+| `PATCH /employees/{id}/hire-date` | HR (в том числе себе) | §6-1 | S6c |
 | `GET /calendar` | любой (по `scope`) | §7-2 | S5 |
 | `GET /events` | любой (SSE, по `scope`) | §10-2 | S8 |
 
@@ -747,7 +751,8 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/HrBalanceRow" }
-        "403": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED: лишний параметр query
+        "403": { $ref: "#/components/responses/Problem" }   # FORBIDDEN (не HR)
   /employees/{id}/hire-date:
     patch:
       tags: [hr]
@@ -769,8 +774,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/HrBalanceRow" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED: нет hireDate, неверная дата, год вне 2000–2100, лишнее поле
+        "403": { $ref: "#/components/responses/Problem" }   # FORBIDDEN (сотрудник виден, но не HR)
+        "404": { $ref: "#/components/responses/Problem" }   # NOT_FOUND (некорректный, несуществующий или невидимый id)
   /calendar:
     get:
       tags: [calendar]
@@ -984,6 +990,8 @@ components:
 - Перенос в `approve`/`reject` (S6b): `replacesId` читается до блокировки, затем `User` → `Vacation {replacesId, id}` по возрастанию id. Утверждение: остаток не проверяется, `DEBIT` нет; сначала старый `APPROVED → REPLACED`, затем перенос `APPROVED`; хук `onVacationApproved` ставит одно письмо `DECISION`; после коммита `vacation.transfer-approved` (вместо `vacation.approved`). Старый уже начался — `422 TRANSFER_APPROVE_AFTER_START`, статусы не меняются. Отклонение — как у обычной заявки, событий нет. В `GET /approvals` у переноса `availableOnStart = null`, `canApprove`/`blockReason` по `TRANSFER_APPROVE_AFTER_START`, в `overlaps` нет переносимого отпуска.
 - `GET /approvals` (S5): руководитель видит `PENDING` своих прямых подчинённых, HR — заявки директора; без подчинённых и не HR — `403 FORBIDDEN`. Порядок по `id`, старые сверху. `availableOnStart` считает тот же `BalanceService`, что `/me/balance?on=` и проверка при согласовании; `blockReason` совпадает с телом ответа `approve` при нехватке дней.
 - `POST /vacations/{id}/approve|reject` (S5): ответ `200`. Тело необязательно, в нём только `comment`; любое другое поле даёт `400 VALIDATION_FAILED`. Комментарий хранится обрезанным по краям, пустой - `null` (`decisionComment`). `decidedAt` и момент списания - один момент Clock на запрос. Заявка читается без блокировки (для `employeeId`), затем `User` → `Vacation` `FOR NO KEY UPDATE`, статус и остаток перечитываются ([раздел 6](#6-политика-блокировок)). Нарушение `LedgerEntry_one_debit_per_vacation_idx` даёт `409 ALREADY_PROCESSED`. Событие `vacation.approved` публикуется после коммита; сбой подписчика пишется в лог и не меняет ответ.
+- `GET /hr/balances` (S6c): только HR, иначе `403 FORBIDDEN`; лишний параметр query - `400`. Все пользователи, в том числе HR и директор (`manager = null`), порядок по `fullName`, затем `id`. `balance` - баланс сегодня тем же `BalanceService`, что `/me/balance`, один момент «сегодня» на запрос; может быть отрицательным (§6-4).
+- `PATCH /employees/{id}/hire-date` (S6c; DECISIONS 2026-10-28 19:19): тело только `hireDate` (формат и годы как у всех дат API). Порядок проверок - раздел 8. Транзакция: `User` `FOR NO KEY UPDATE`, та же дата не пишется, иначе `UPDATE hireDate`; журнал, заявки и outbox не меняются (§6-3, §6-6). Ответ `200` - `HrBalanceRow` после коммита. Событие `employee.hire-date-changed` после коммита и только при реальном изменении; та же дата - `200` без события. `accessGranted` не меняется (§6-5, §6-7). Дата в будущем и раньше одобренных отпусков принимается; новые заявки проверяются по новой дате (`NO_ACCRUAL_YET`, `VACATION_BEFORE_HIRE`), согласование повторно проверяет только остаток (DECISIONS 2026-10-28 19:19).
 - `GET /calendar` (S5-e): только `APPROVED` в пределах `scope` зрителя; отпуск попадает, если пересекается с `[from, to]`, даты отдаются полностью; порядок `startDate`, имя, `id`. `from` и `to` обязательны; неверная дата, `from > to` и лишние параметры (в том числе `employeeId`) дают `400 VALIDATION_FAILED`; длина диапазона не ограничена. `balances` есть только у зрителя с прямыми подчинёнными (тот же `BalanceService`, что `/me/balance`), у остальных поля нет. Обновление при перезагрузке или переходе, поток SSE — S8.
 
 ---
@@ -1078,6 +1086,7 @@ components:
 - **Перенос** (DECISIONS 2026-10-28 17:06): `VALIDATION_FAILED` → `NOT_FOUND` → `FORBIDDEN` (не владелец) → `ALREADY_PROCESSED` (исходный `CANCELLED` или `REPLACED`) → `TRANSFER_SOURCE_NOT_APPROVED` (`PENDING`, `REJECTED`) → `TRANSFER_ALREADY_PENDING` → `TRANSFER_STARTED` → `BACKSTOPPER_REQUIRED` → `BACKSTOPPER_IS_SELF` → `BACKSTOPPER_NOT_FOUND` → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `TRANSFER_START_IN_PAST` → `TRANSFER_WORKDAYS_MISMATCH` → `VACATION_OVERLAP`. Повторный перенос, пока перенос ждёт решения, — `TRANSFER_ALREADY_PENDING`; отмена и отзыв старого — `PENDING_TRANSFER_BLOCKS`. Проверки `NO_ACCRUAL_YET`, `VACATION_BEFORE_HIRE` (§3-12), `PAST_*` и `INSUFFICIENT_BALANCE` к переносу не применяются (остаток не проверяется, перенос в прошлое запрещён отдельным правилом, §5-2).
 - **Отмена** (DECISIONS 2026-10-28 15:41): `VALIDATION_FAILED` → `NOT_FOUND` → `FORBIDDEN` (не владелец) → `ALREADY_PROCESSED` (статус не `PENDING` и не `APPROVED`) → `PENDING_TRANSFER_BLOCKS` → `CANCEL_STARTED_BY_EMPLOYEE` (`APPROVED`, сегодня ≥ начала) или `CANCEL_PENDING_AFTER_START` (`PENDING`, сегодня ≥ начала).
 - **Отзыв** (DECISIONS 2026-10-28 15:41): `VALIDATION_FAILED` → `NOT_FOUND` → `FORBIDDEN` (не HR) → `ALREADY_PROCESSED` (`CANCELLED`, `REPLACED`) → `RECALL_NOT_APPROVED` (`PENDING`, `REJECTED`) → `RECALL_NOT_STARTED` → `RECALL_FINISHED` → `PENDING_TRANSFER_BLOCKS` → `RECALL_DATE_OUT_OF_RANGE`.
+- **Смена даты выхода** (DECISIONS 2026-10-28 19:19): `VALIDATION_FAILED` (тело, затем формат и годы даты) → `NOT_FOUND` (некорректный, несуществующий или невидимый зрителю id) → `FORBIDDEN` (виден, но не HR). HR меняет дату и себе.
 - **Согласование:** `NOT_FOUND` (невидимая, несуществующая, некорректный id) → `APPROVE_OWN_REQUEST` (автор) → `NOT_APPROVER` → `ALREADY_PROCESSED` → `TRANSFER_APPROVE_AFTER_START` (перенос) или `APPROVE_INSUFFICIENT_BALANCE` (обычная заявка). Текст `APPROVE_INSUFFICIENT_BALANCE` оформлен как `INSUFFICIENT_BALANCE`: дни через запятую, минус типографский, в `details.available` и `details.requested` числа (DECISIONS 2026-10-26 10:47).
 
 ### Соответствие ограничениям БД
@@ -1226,7 +1235,7 @@ pass():
 | Утверждение переноса | §5-2 | в одной транзакции `A: REPLACED`, затем `B: APPROVED`; журнал не меняется; `DECISION`; `vacation.transfer-approved` |
 | Отклонение или отмена переноса | §3-11, §5-3 | `B: REJECTED` или `CANCELLED`; `A` остаётся `APPROVED`; письмо о решении только при отклонении |
 | Цепочка A→B→C, отмена C | §5-12, §6-8 | `C: CANCELLED`; `REFUND(vacationId = C, refundOfId = DEBIT(A))`; A и B остаются `REPLACED` |
-| Смена даты выхода | §6-1…§6-5 | `User.hireDate`; журнал и отпуска не меняются; остаток пересчитывается при чтении; `employee.hire-date-changed` |
+| Смена даты выхода | §6-1…§6-5 | `User.hireDate`; журнал и отпуска не меняются; остаток пересчитывается при чтении; `employee.hire-date-changed` (только если дата изменилась) |
 | Отрицательный остаток | §6-4 | строк нет: свёртка даёт минус; доступ не отзывается (`accessGranted` не меняется) |
 | Напоминание | §8-3 | `OutboxMessage(REMINDER)` ×(сотрудник, руководитель) |
 | Демо-часы | §9-2 | `ClockState(id = 1, instant)` |
@@ -1288,6 +1297,9 @@ pass():
 27. Порядок проверок переноса: тело запроса, видимость и владелец раньше состояния исходного отпуска; исходный `CANCELLED`/`REPLACED` — `409 ALREADY_PROCESSED`, `PENDING`/`REJECTED` — `422 TRANSFER_SOURCE_NOT_APPROVED`; `TRANSFER_WORKDAYS_MISMATCH` с `details {old, requested}` (S6b, раздел 8; DECISIONS 2026-10-28 17:06).
 28. Перенос не блокирует преемника при отмене и отзыве: наличие переноса «На согласовании» читается под блокировкой `User`, которая сериализует все операции сотрудника (S6b, раздел 6).
 29. Интерфейс переноса: «Перенести» только в «Моих заявках» на странице «Отпуск», форма в строке (даты пустые, backstopper прежний), пометки в ячейке статуса через «·», на карточке согласования плашка «Перенос одобренного отпуска» без старых дат и «не проверяется (перенос)» вместо остатка (S6b; DECISIONS 2026-10-28 17:06).
+30. Смена даты выхода: порядок `VALIDATION_FAILED → NOT_FOUND → FORBIDDEN` как у отзыва, та же дата - без записи и события, HR меняет дату и себе; маршруты в модуле `hr`, `User` пишет `org` (S6c, разделы 4, 7, 8; DECISIONS 2026-10-28 19:19).
+31. При согласовании `VACATION_BEFORE_HIRE` повторно не проверяется, только остаток (S6c; DECISIONS 2026-10-28 19:19).
+32. Экран HR в S6c: раздел «Остатки по сотрудникам» после «Все заявки», форма смены даты в строке, предупреждение при вводе, разовое сообщение только в состоянии страницы (DECISIONS 2026-10-28 19:19).
 
 ### Известные ограничения
 
@@ -1303,4 +1315,6 @@ pass():
 - Отмена заявки-переноса, когда старый отпуск уже начался, не проработана: действует буквальный текст §5 (ROADMAP, N4).
 - Свой отпуск HR отзывает сам; передача этого права руководителю HR — «следующим заходом» (RULES §5-5, §11).
 - Откат демо-часов не пересчитывает журнал (§9-5).
+- HR меняет свою дату выхода без отдельного контроля (DECISIONS 2026-10-28 19:19).
+- После сдвига даты выхода согласование не проверяет «начало не раньше даты выхода» (§3-12): отпуск, начавшийся раньше новой даты, может быть одобрен, если хватает остатка (DECISIONS 2026-10-28 19:19).
 - Неизвестный маршрут без токена отвечает `404`, существующий `401`: по этому видны существующие маршруты. Контракт API открыт (этот документ), данных это не раскрывает; принято в S3, пересмотреть в аудите S9 (issue #2).
