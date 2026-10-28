@@ -1,5 +1,5 @@
 // Матрица доступа: маршрут x роль -> ожидаемый статус. Этапы S4-S8 дописывают сюда строки
-// (RULES §7-2). Здесь строки S3, S4 и S5.
+// (RULES §7-2). Здесь строки S3, S4 и S5 (в том числе календарь S5-e).
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
@@ -205,6 +205,14 @@ const ROWS: Row[] = [
     },
     rules: '§4-1, §4-2, §7-2',
   })),
+  {
+    // календарь видит любой вошедший; кого он показывает, решает scope (RULES §7-2)
+    method: 'get',
+    path: '/calendar?from=2026-11-01&to=2026-11-30',
+    demo: true,
+    expected: signedIn(200),
+    rules: '§7-2',
+  },
   {
     method: 'get',
     path: '/config',
