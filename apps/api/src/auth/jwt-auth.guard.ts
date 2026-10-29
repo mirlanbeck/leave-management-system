@@ -6,7 +6,8 @@ import { ApiError, MESSAGES } from '../common/problem';
 import { AuthUser, AuthUsers } from './auth-user';
 import { IS_PUBLIC } from './public.decorator';
 
-export type AuthedRequest = Request & { user: AuthUser };
+/** `tokenExp` - срок токена в секундах UNIX: SSE закрывает поток в этот момент (RULES §7-1). */
+export type AuthedRequest = Request & { user: AuthUser; tokenExp?: number };
 
 function required(): ApiError {
   return new ApiError(401, 'AUTH_REQUIRED', MESSAGES.AUTH_REQUIRED);
@@ -40,12 +41,15 @@ export class JwtAuthGuard implements CanActivate {
     if (!token) throw required();
 
     let sub: string | undefined;
+    let exp: number | undefined;
     try {
       // срок и подпись по системным часам; алгоритм зафиксирован в настройках JwtModule
-      const payload = await this.jwt.verifyAsync<{ sub?: string }>(token, {
-        algorithms: ['HS256'],
-      });
+      const payload = await this.jwt.verifyAsync<{
+        sub?: string;
+        exp?: number;
+      }>(token, { algorithms: ['HS256'] });
       sub = payload.sub;
+      exp = payload.exp;
     } catch (e) {
       if ((e as Error).name === 'TokenExpiredError') {
         throw new ApiError(
@@ -62,6 +66,7 @@ export class JwtAuthGuard implements CanActivate {
     const user = await this.users.findById(id);
     if (!user) throw required();
     req.user = user;
+    req.tokenExp = exp;
     return true;
   }
 }

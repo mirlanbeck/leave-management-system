@@ -13,6 +13,7 @@ import {
   canSee,
   rolesOf,
   scope,
+  type OrgUser,
   type Scope,
 } from './policy';
 
@@ -53,6 +54,14 @@ export class OrgService {
       orderBy: { id: 'asc' },
     });
     return rows.map((r) => r.id);
+  }
+
+  /** Вся структура одним запросом: фильтр SSE читает её один раз на событие (RULES §7-2, §10-2). */
+  structure(): Promise<OrgUser[]> {
+    return this.prisma.user.findMany({
+      select: { id: true, isHr: true, managerId: true },
+      orderBy: { id: 'asc' },
+    });
   }
 
   async visibleTo(viewer: AuthUser): Promise<Scope> {

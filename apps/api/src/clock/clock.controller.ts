@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Inject, Put, UseGuards } from '@nestjs/common';
 import { ApiError, MESSAGES } from '../common/problem';
 import { APP_ENV } from '../config/app-config';
+import { EventBus } from '../events/event-bus';
 import { AFTER_CLOCK_SET, type AfterClockSet } from './after-clock-set';
 import { Clock } from './clock';
 import { companyLocalToInstant } from './company-time';
@@ -21,6 +22,7 @@ export class ClockController {
     private readonly clock: Clock,
     @Inject(APP_ENV) private readonly env: NodeJS.ProcessEnv,
     @Inject(AFTER_CLOCK_SET) private readonly afterSet: AfterClockSet,
+    private readonly events: EventBus,
   ) {}
 
   @Get()
@@ -46,6 +48,8 @@ export class ClockController {
     }
     await this.clock.set(instant);
     await this.afterSet(instant);
+    // RULES §10-2: после прохода планировщика все открытые вкладки перечитываются целиком
+    this.events.publish({ type: 'clock.changed' });
     return this.view();
   }
 
