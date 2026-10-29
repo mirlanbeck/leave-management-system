@@ -54,9 +54,7 @@ test.describe('S3-d: каркас, вход и защита страниц', () 
   });
 
   // RULES §7-2
-  test('запретная страница по прямому адресу редиректит на главную, а не показывает заглушку', async ({
-    page,
-  }) => {
+  test('запретная страница по прямому адресу редиректит на главную, а не показывает заглушку', async ({ page }) => {
     await loginAs(page, 'james');
     await page.goto('/hr');
     await expect(page).toHaveURL(/\/$/);
@@ -89,10 +87,13 @@ test.describe('S3-d: каркас, вход и защита страниц', () 
   // RULES §7-1
   test('токен лежит в sessionStorage, localStorage пуст', async ({ page }) => {
     await loginAs(page, 'james');
-    const stored = await page.evaluate((key) => ({
-      session: sessionStorage.getItem(key),
-      localCount: localStorage.length,
-    }), TOKEN_KEY);
+    const stored = await page.evaluate(
+      (key) => ({
+        session: sessionStorage.getItem(key),
+        localCount: localStorage.length,
+      }),
+      TOKEN_KEY,
+    );
     expect(stored.session).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
     expect(stored.localCount).toBe(0);
   });
@@ -107,15 +108,10 @@ test.describe('S3-d: каркас, вход и защита страниц', () 
   });
 
   // RULES §7-1
-  test('истёкший токен: «Сессия истекла, войдите снова» и возврат на прежнюю страницу', async ({
-    page,
-  }) => {
+  test('истёкший токен: «Сессия истекла, войдите снова» и возврат на прежнюю страницу', async ({ page }) => {
     await loginAs(page, 'daniel');
     const real = await page.evaluate((key) => sessionStorage.getItem(key)!, TOKEN_KEY);
-    await page.evaluate(
-      ([key, token]) => sessionStorage.setItem(key, token),
-      [TOKEN_KEY, expiredTokenOf(real)],
-    );
+    await page.evaluate(([key, token]) => sessionStorage.setItem(key, token), [TOKEN_KEY, expiredTokenOf(real)]);
 
     await page.goto('/approvals');
     await expect(page).toHaveURL(/\/login$/);

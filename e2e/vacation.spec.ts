@@ -124,9 +124,7 @@ test.describe('Заявка на больше дней, чем будет нак
 
     await fillRequest(page, '2026-12-28', '2027-01-05', 'Sophie Bennett');
     await submitButton(page).click();
-    await expect(error).toHaveText(
-      'Заявка не может охватывать два года, подайте две заявки (VACATION_CROSSES_YEAR)',
-    );
+    await expect(error).toHaveText('Заявка не может охватывать два года, подайте две заявки (VACATION_CROSSES_YEAR)');
 
     // 24–25.10.2026: суббота и воскресенье
     await fillRequest(page, '2026-10-24', '2026-10-25', 'Sophie Bennett');
@@ -140,9 +138,7 @@ test.describe('Заявка на больше дней, чем будет нак
 
     await fillRequest(page, '2026-11-04', '2026-11-10', 'Sophie Bennett');
     await submitButton(page).click();
-    await expect(error).toHaveText(
-      'У вас уже есть заявка на эти даты: с 2026-11-02 по 2026-11-06 (VACATION_OVERLAP)',
-    );
+    await expect(error).toHaveText('У вас уже есть заявка на эти даты: с 2026-11-02 по 2026-11-06 (VACATION_OVERLAP)');
     await expect(rows(page)).toHaveCount(1);
   });
 });

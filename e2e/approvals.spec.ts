@@ -1,14 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
-import {
-  decideViaApi,
-  email,
-  loginAs,
-  openFromNav,
-  signIn,
-  submitViaApi,
-  waitForSettledInbox,
-} from './helpers';
+import { decideViaApi, email, loginAs, openFromNav, signIn, submitViaApi, waitForSettledInbox } from './helpers';
 
 // Экран «Согласование» (S5-d, issue #60). Данные — фикстуры через API после e2e:reset
 // (DECISIONS [S5]); часы 2026-10-21 09:00 по Бишкеку, ожидаемые числа сверены с API.
