@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return -- строки pg имеют тип any */
+/* eslint-disable @typescript-eslint/no-unsafe-return -- строки pg имеют тип any */
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import { MailTransport, type OutgoingMail } from '../mail/mail-transport';
