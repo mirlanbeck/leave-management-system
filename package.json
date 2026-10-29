@@ -9,7 +9,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "lint": "npm run lint:check -w apps/api && npm run lint:check -w apps/web && npm run format:check -w apps/web",
+    "lint": "npm run lint:check -w apps/api && npm run lint:check -w apps/web && npm run format:check -w apps/web && npm run format:check -w e2e",
     "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web && npm run typecheck -w e2e",
     "test": "npm test -w apps/api && npm test -w apps/web",
     "test:tz": "cross-env TZ=America/New_York npm test -w apps/api && cross-env TZ=America/New_York npm test -w apps/web",
