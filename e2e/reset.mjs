@@ -5,8 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ?? 'postgresql://leave:leave@127.0.0.1:5432/leave';
+const DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://leave:leave@127.0.0.1:5432/leave';
 const MAILPIT_URL = process.env.MAILPIT_URL ?? 'http://127.0.0.1:8025';
 
 export async function resetDb() {
