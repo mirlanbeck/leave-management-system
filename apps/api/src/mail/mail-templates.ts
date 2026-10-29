@@ -62,3 +62,30 @@ export function decisionMail(m: DecisionMailInput): MailContent {
     lines.push('Решение по заявке директора принимает HR (допуск HR).');
   return { subject, body: lines.join('\n') };
 }
+
+/** Данные напоминания об отпуске; ссылок в письме нет (RULES §8-3). */
+export interface ReminderMailInput {
+  employeeName: string;
+  startDate: CalendarDate;
+  endDate: CalendarDate;
+  workDays: number;
+  backstopperName: string;
+  /** Письмо руководителю об отпуске подчинённого; иначе — самому сотруднику (RULES §8-5). */
+  toManager: boolean;
+}
+
+/** Тема и текст письма REMINDER (тексты определены в S7, architecture §10). */
+export function reminderMail(m: ReminderMailInput): MailContent {
+  const period = `${m.startDate}–${m.endDate}`;
+  const subject = m.toManager
+    ? `Напоминание: отпуск ${m.employeeName}, ${period}`
+    : `Напоминание: отпуск ${period}`;
+  const first = m.toManager
+    ? `${m.employeeName} уходит в отпуск с ${m.startDate} по ${m.endDate}.`
+    : `Ваш отпуск с ${m.startDate} по ${m.endDate} скоро начнётся.`;
+  const lines = [
+    first,
+    `Рабочих дней: ${m.workDays}. Заменяющий: ${m.backstopperName}.`,
+  ];
+  return { subject, body: lines.join('\n') };
+}
