@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import {
   approverOf,
+  calendarScope,
   canDecide,
   canSee,
   rolesOf,
@@ -94,6 +95,57 @@ describe('scope', () => {
         },
       ),
     );
+  });
+});
+
+describe('calendarScope', () => {
+  // Та же структура и второй сотрудник команды 1: С1' (8) <- Р1
+  const org = [...users, { id: 8, isHr: false, managerId: 4 }];
+  const reportsOf = (id: number) =>
+    org.filter((u) => u.managerId === id).map((u) => u.id);
+  const cal = (id: number) => {
+    const viewer = org.find((u) => u.id === id)!;
+    const peers = viewer.managerId === null ? [] : reportsOf(viewer.managerId);
+    const s = calendarScope(viewer, reportsOf(id), peers);
+    return s === 'ALL' ? s : [...s].sort((a, b) => a - b);
+  };
+
+  // RULES §7-2: сотрудник - коллеги с тем же руководителем и сам руководитель
+  it('сотрудник команды 1 видит себя, коллегу и Р1, но не команду 2', () => {
+    expect(cal(6)).toEqual([4, 6, 8]);
+    expect(cal(8)).toEqual([4, 6, 8]);
+  });
+
+  // RULES §7-2
+  it('единственный сотрудник команды 2 видит себя и Р2', () => {
+    expect(cal(7)).toEqual([5, 7]);
+  });
+
+  // RULES §7-2: руководитель - только прямые подчинённые, коллег-руководителей не видит
+  it('руководитель видит себя и прямых подчинённых, но не Р2, HR и заместителя', () => {
+    expect(cal(4)).toEqual([4, 6, 8]);
+    expect(cal(5)).toEqual([5, 7]);
+  });
+
+  // RULES §7-2, §7-3: заместитель и директор - как руководители
+  it('заместитель и директор видят прямых подчинённых', () => {
+    expect(cal(2)).toEqual([2, 3, 4, 5]);
+    expect(cal(1)).toEqual([1, 2]);
+  });
+
+  // RULES §7-2
+  it('HR видит всю компанию', () => {
+    expect(cal(3)).toBe('ALL');
+  });
+
+  // RULES §7-2: календарь не уже `scope` - всё, что видно по `scope`, видно и в календаре
+  it('scope(v) ⊆ calendarScope(v)', () => {
+    for (const u of org) {
+      const s = scope(u, reportsOf(u.id));
+      const c = cal(u.id);
+      if (s === 'ALL') expect(c).toBe('ALL');
+      else if (c !== 'ALL') for (const id of s) expect(c).toContain(id);
+    }
   });
 });
 

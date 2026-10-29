@@ -11,8 +11,9 @@ import {
   monthParam,
   monthTitle,
   parseMonth,
-  scopeCaption,
   shiftMonth,
+  splitEntries,
+  teamCaption,
 } from './calendar-logic';
 
 const entry = (
@@ -96,9 +97,20 @@ describe('сетка и список', () => {
   });
 
   // RULES §7-2
-  it('подпись по роли: сотрудник, руководитель, HR', () => {
-    expect(scopeCaption({ isHr: false, isManager: false })).toBe('Мои отпуска');
-    expect(scopeCaption({ isHr: false, isManager: true })).toBe('Я и моя команда');
-    expect(scopeCaption({ isHr: true, isManager: false })).toBe('Вся компания');
+  it('заголовок нижнего блока по роли: сотрудник, руководитель, HR', () => {
+    expect(teamCaption({ isHr: false, isManager: false })).toBe('Календарь команды');
+    expect(teamCaption({ isHr: false, isManager: true })).toBe('Календарь команды');
+    expect(teamCaption({ isHr: true, isManager: false })).toBe('Вся компания');
+  });
+
+  // RULES §7-2: свои отпуска сверху, в календаре команды своих нет
+  it('splitEntries делит записи на свои и команды, сохраняя порядок', () => {
+    const a = entry(1, 7, 'James Walker', '2026-11-02', '2026-11-06');
+    const b = entry(2, 8, 'Liam Foster', '2026-11-09', '2026-11-13');
+    const c = entry(3, 7, 'James Walker', '2026-11-23', '2026-11-27');
+    const d = entry(4, 4, 'Daniel Brooks', '2026-11-16', '2026-11-20', null);
+    expect(splitEntries([a, b, c, d], 7)).toEqual({ mine: [a, c], team: [b, d] });
+    expect(splitEntries([b, d], 7)).toEqual({ mine: [], team: [b, d] });
+    expect(splitEntries([], 7)).toEqual({ mine: [], team: [] });
   });
 });

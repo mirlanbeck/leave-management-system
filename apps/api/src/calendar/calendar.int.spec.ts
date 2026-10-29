@@ -94,14 +94,41 @@ describe('календарь: GET /calendar (integration, нужен Postgres)',
   });
 
   // RULES §7-2
-  it('сотрудник видит только себя: одобренный отпуск коллеги в том же месяце не виден', async () => {
+  it('сотрудник видит себя, коллег по команде и руководителя, но не другую команду', async () => {
     await vacation('employee1');
     await vacation('employee2', { start: '2026-11-09', end: '2026-11-13' });
+    await vacation('manager1', { start: '2026-11-16', end: '2026-11-20' });
+    await vacation('employee4', { start: '2026-11-09', end: '2026-11-13' });
+    await vacation('manager2', { start: '2026-11-23', end: '2026-11-27' });
+    await vacation('deputy', { start: '2026-11-23', end: '2026-11-27' });
 
     const res = await calendar('employee1');
 
     expect(res.status).toBe(200);
-    expect(who(res.body)).toEqual([ids.employee1]);
+    expect(who(res.body)).toEqual([ids.employee1, ids.employee2, ids.manager1]);
+    expect(res.body).not.toHaveProperty('balances');
+  });
+
+  // RULES §3-11, §7-2: у коллег видны только одобренные отпуска
+  it('сотрудник не видит заявки коллеги «На согласовании» и «Отклонена»', async () => {
+    await vacation('employee2', { status: 'PENDING' });
+    await vacation('employee3', { status: 'REJECTED' });
+    await vacation('manager1', { status: 'PENDING' });
+
+    const res = await calendar('employee1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.entries).toEqual([]);
+  });
+
+  // RULES §7-2: календарь расширен, а карточка отпуска коллеги по-прежнему закрыта
+  it('одобренный отпуск коллеги виден в календаре, но GET /vacations/{id} -> 404', async () => {
+    const id = await vacation('employee2');
+
+    expect(who((await calendar('employee1')).body)).toEqual([ids.employee2]);
+    const res = await get('employee1', `/vacations/${id}`);
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('NOT_FOUND');
   });
 
   // RULES §7-2

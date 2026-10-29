@@ -7,7 +7,14 @@ import {
 } from '../domain/calendar-date';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { approverOf, canSee, rolesOf, scope, type Scope } from './policy';
+import {
+  approverOf,
+  calendarScope,
+  canSee,
+  rolesOf,
+  scope,
+  type Scope,
+} from './policy';
 
 /** «id + имя»: единственные поля, которые видят все (RULES §3-3, §7-2). */
 export interface EmployeeRef {
@@ -50,6 +57,16 @@ export class OrgService {
 
   async visibleTo(viewer: AuthUser): Promise<Scope> {
     return scope(viewer, await this.directReportIds(viewer.id));
+  }
+
+  /** Видимость календаря (RULES §7-2): у сотрудника ещё коллеги и руководитель. */
+  async calendarScope(viewer: AuthUser): Promise<Scope> {
+    const reports = await this.directReportIds(viewer.id);
+    const peers =
+      viewer.managerId === null
+        ? []
+        : await this.directReportIds(viewer.managerId);
+    return calendarScope(viewer, reports, peers);
   }
 
   async canSee(viewer: AuthUser, employeeId: number): Promise<boolean> {

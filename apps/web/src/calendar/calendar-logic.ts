@@ -122,11 +122,17 @@ export function entryOn(row: GridRow, iso: string): CalendarEntry | undefined {
   return row.entries.find((e) => e.startDate <= iso && iso <= e.endDate);
 }
 
-/** Подпись под заголовком по тому, кого показывает календарь (RULES §7-2). */
-export function scopeCaption(flags: RoleFlags): string {
-  if (flags.isHr) return 'Вся компания';
-  if (flags.isManager) return 'Я и моя команда';
-  return 'Мои отпуска';
+/** Заголовок нижнего блока по тому, кого показывает календарь команды (RULES §7-2). */
+export function teamCaption(flags: RoleFlags): string {
+  return flags.isHr ? 'Вся компания' : 'Календарь команды';
+}
+
+/** Блоки страницы (RULES §7-2): свои отпуска сверху, остальные в календаре команды. */
+export function splitEntries(entries: CalendarEntry[], meId: number): { mine: CalendarEntry[]; team: CalendarEntry[] } {
+  return {
+    mine: entries.filter((e) => e.employee.id === meId),
+    team: entries.filter((e) => e.employee.id !== meId),
+  };
 }
 
 /** Строка списка под сеткой; команда пустая у руководителей и выше - тогда только имя. */

@@ -52,6 +52,23 @@ export function scope(viewer: OrgUser, directReportIds: number[]): Scope {
   return new Set([viewer.id, ...directReportIds]);
 }
 
+/**
+ * Кого показывает календарь (RULES §7-2): шире `scope` только у сотрудника без подчинённых -
+ * коллеги с тем же руководителем и сам руководитель. Заявки, карточки и остатки по-прежнему
+ * решает `scope`. `peerIds` - пользователи с тем же `managerId`, что у зрителя.
+ */
+export function calendarScope(
+  viewer: OrgUser,
+  directReportIds: number[],
+  peerIds: number[],
+): Scope {
+  if (viewer.isHr) return 'ALL';
+  if (directReportIds.length > 0) return scope(viewer, directReportIds);
+  const ids = new Set([viewer.id, ...peerIds]);
+  if (viewer.managerId !== null) ids.add(viewer.managerId);
+  return ids;
+}
+
 export function canSee(
   viewer: OrgUser,
   directReportIds: number[],

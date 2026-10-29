@@ -4,7 +4,7 @@ import { OrgModule } from '../org/org.module';
 import { CalendarController } from './calendar.controller';
 import { CalendarService } from './calendar.service';
 
-/** Календарь без SSE (architecture §4): read-model по `visibleTo`; поток событий - S8. */
+/** Календарь без SSE (architecture §4): read-model по `calendarScope`; поток событий - S8. */
 @Module({
   imports: [OrgModule, BalanceModule],
   controllers: [CalendarController],
