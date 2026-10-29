@@ -45,7 +45,8 @@ export class CalendarService {
     from: CalendarDate,
     to: CalendarDate,
   ): Promise<CalendarView> {
-    const scope = await this.org.visibleTo(viewer);
+    // RULES §7-2: календарь шире `visibleTo` (у сотрудника - коллеги и руководитель)
+    const scope = await this.org.calendarScope(viewer);
     const where: Prisma.VacationWhereInput = {
       status: VacationStatus.APPROVED,
       startDate: { lte: toDbDate(to) },
