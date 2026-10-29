@@ -9,8 +9,12 @@ import {
   setDbClock,
 } from '../testing/int-helpers';
 import { createTestApp } from '../testing/test-app';
-import { createPool, seedRulesOrg, truncateAll } from '../testing/test-db';
-import { AFTER_CLOCK_SET } from './after-clock-set';
+import {
+  createPool,
+  insertVacation,
+  seedRulesOrg,
+  truncateAll,
+} from '../testing/test-db';
 
 describe('GET/PUT /clock (integration, нужен Postgres)', () => {
   let pool: Pool;
@@ -19,9 +23,11 @@ describe('GET/PUT /clock (integration, нужен Postgres)', () => {
     pool = createPool();
   });
 
+  let ids: Awaited<ReturnType<typeof seedRulesOrg>>;
+
   beforeEach(async () => {
     await truncateAll(pool);
-    await seedRulesOrg(pool, await passwordHash());
+    ids = await seedRulesOrg(pool, await passwordHash());
   });
 
   afterAll(() => pool.end());
@@ -36,19 +42,12 @@ describe('GET/PUT /clock (integration, нужен Postgres)', () => {
   describe('с DEMO_MODE=true', () => {
     let app: INestApplication;
     let token: string;
-    const calls: Date[] = [];
 
     beforeAll(async () => {
-      app = await createTestApp({ DEMO_MODE: 'true' }, (b) =>
-        b.overrideProvider(AFTER_CLOCK_SET).useValue((d: Date) => {
-          calls.push(d);
-          return Promise.resolve();
-        }),
-      );
+      app = await createTestApp({ DEMO_MODE: 'true' });
     });
 
     beforeEach(async () => {
-      calls.length = 0;
       await setDbClock(pool, '2026-10-24T03:00:00Z');
       token = await loginAs(app, 'employee1');
     });
@@ -110,19 +109,64 @@ describe('GET/PUT /clock (integration, нужен Postgres)', () => {
       expect(await stored()).toBe('2026-10-24T03:00:00.000Z');
     });
 
-    // RULES §9-4
-    it('точка расширения вызвана один раз, после установки, до ответа', async () => {
-      const res = await put({ date: '2026-12-31', time: '09:00' });
+    // Одобренный отпуск вт 2026-11-10 – пт 2026-11-13: дата напоминания чт 2026-11-05 (N = 3)
+    const approvedVacation = () =>
+      insertVacation(pool, {
+        employeeId: ids.employee1,
+        backstopperId: ids.employee2,
+        start: '2026-11-10',
+        end: '2026-11-13',
+        workDays: 4,
+        status: 'APPROVED',
+      });
+    const reminders = async (vacationId: number) =>
+      (
+        await pool.query<{ recipientId: number; createdAt: Date }>(
+          `SELECT "recipientId", "createdAt" FROM "OutboxMessage"
+           WHERE type = 'REMINDER' AND "vacationId" = $1 ORDER BY "recipientId"`,
+          [vacationId],
+        )
+      ).rows;
+
+    // RULES §9-4, §8-3: проход планировщика после установки, до ответа (аудит 2, F-1, F-5)
+    it('часы на дату напоминания 09:00 → к ответу уже 2 напоминания', async () => {
+      const id = await approvedVacation();
+      const res = await put({ date: '2026-11-05', time: '09:00' });
       expect(res.status).toBe(200);
-      expect(calls.map((d) => d.toISOString())).toEqual([
-        '2026-12-31T03:00:00.000Z',
+      const rows = await reminders(id);
+      expect(rows.map((r) => r.recipientId)).toEqual([
+        ids.manager1,
+        ids.employee1,
       ]);
+      for (const r of rows) {
+        expect(r.createdAt.toISOString()).toBe('2026-11-05T03:00:00.000Z');
+      }
     });
 
-    // RULES §9-3
-    it('при неверных данных точка расширения не вызывается', async () => {
+    // RULES §8-3, §9-4: проход срабатывает «как в этот день»: до 09:00 напоминания нет
+    it('часы на дату напоминания 08:59 → напоминаний нет', async () => {
+      const id = await approvedVacation();
+      expect((await put({ date: '2026-11-05', time: '08:59' })).status).toBe(
+        200,
+      );
+      expect(await reminders(id)).toEqual([]);
+    });
+
+    // RULES §9-5, §10-1: откат часов и повторная перемотка дубля не дают
+    it('вперёд, назад, снова вперёд → по-прежнему 2', async () => {
+      const id = await approvedVacation();
+      await put({ date: '2026-11-05', time: '09:00' });
+      await put({ date: '2026-11-01', time: '09:00' });
+      await put({ date: '2026-11-06', time: '09:00' });
+      expect(await reminders(id)).toHaveLength(2);
+    });
+
+    // RULES §9-3: неверные данные — часы не меняются, прохода нет
+    it('при неверных данных проход не выполняется', async () => {
+      const id = await approvedVacation();
+      await setDbClock(pool, '2026-11-05T03:00:00Z');
       await put({ date: '2026-02-30', time: '09:00' });
-      expect(calls).toEqual([]);
+      expect(await reminders(id)).toEqual([]);
     });
 
     // RULES §9-3: любому вошедшему
