@@ -1,8 +1,10 @@
 import {
   decisionMail,
   newRequestMail,
+  reminderMail,
   type DecisionMailInput,
   type NewRequestMailInput,
+  type ReminderMailInput,
 } from './mail-templates';
 
 const base: NewRequestMailInput = {
@@ -143,5 +145,38 @@ describe('decisionMail', () => {
   it.each([false, true])('без ссылок (forHr: %p)', (forHr) => {
     const { subject, body } = decisionMail({ ...decision, forHr });
     expect(`${subject}\n${body}`).not.toMatch(/https?:|www\.|<a\s/i);
+  });
+});
+
+describe('reminderMail', () => {
+  const reminder: ReminderMailInput = {
+    employeeName: 'Иванова Мария',
+    startDate: '2026-11-10',
+    endDate: '2026-11-13',
+    workDays: 4,
+    backstopperName: 'Петров Пётр',
+    toManager: false,
+  };
+
+  // RULES §8-3, §8-5: напоминание сотруднику
+  it('сотруднику: тема и текст', () => {
+    expect(reminderMail(reminder)).toEqual({
+      subject: 'Напоминание: отпуск 2026-11-10–2026-11-13',
+      body: [
+        'Ваш отпуск с 2026-11-10 по 2026-11-13 скоро начнётся.',
+        'Рабочих дней: 4. Заменяющий: Петров Пётр.',
+      ].join('\n'),
+    });
+  });
+
+  // RULES §8-3, §8-5: напоминание руководителю об отпуске подчинённого
+  it('руководителю: тема и текст с именем сотрудника', () => {
+    expect(reminderMail({ ...reminder, toManager: true })).toEqual({
+      subject: 'Напоминание: отпуск Иванова Мария, 2026-11-10–2026-11-13',
+      body: [
+        'Иванова Мария уходит в отпуск с 2026-11-10 по 2026-11-13.',
+        'Рабочих дней: 4. Заменяющий: Петров Пётр.',
+      ].join('\n'),
+    });
   });
 });

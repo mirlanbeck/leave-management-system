@@ -46,7 +46,7 @@ export function demoServices(
       balance,
       clock,
       events,
-      new VacationApprovedHook(),
+      new VacationApprovedHook(env),
       env,
     ),
   };
