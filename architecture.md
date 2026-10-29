@@ -280,13 +280,13 @@ flowchart TD
 |---|---|---|---|---|
 | **clock** | единственный источник «сейчас»; демо-часы в БД; установка часов | `ClockState` | `await Clock.now()`, `DbClock.set(instant)`, `companyToday(now, tz): YYYY-MM-DD` по `COMPANY_TZ` | S0, S3 |
 | **auth** | вход по логину и паролю, JWT (8 ч, системные часы), guard, признак `accessGranted` | — (читает/пишет `User`) | `login()`, `JwtGuard`, `@Roles()` | S3 |
-| **org** | структура: руководитель, подчинённые, роли, `approverOf`, `visibleTo`, справочник, дата выхода | `User` | `rolesOf(user)`, `approverOf(employee)`, `visibleTo(viewer)`, `canSee(viewer, employeeId)`, `directory()`, `roster()`, `setHireDate(id, date)` | S3, S6c |
+| **org** | структура: руководитель, подчинённые, роли, `approverOf`, `visibleTo`, справочник, дата выхода | `User` | `rolesOf(user)`, `approverOf(employee)`, `visibleTo(viewer)`, `calendarScope(viewer)`, `canSee(viewer, employeeId)`, `directory()`, `roster()`, `setHireDate(id, date)` | S3, S6c |
 | **balance** | журнал и баланс: чтение свёртки, запись списания и возврата | `LedgerEntry` | `balanceToday(employee)`, `availableOn(employee, D)`, `debit(tx, vacation)`, `refund(tx, vacation, halfDays)` | S2, S4–S6 |
 | **vacations** | подача, статусы, отмена, отзыв, перенос, списки по видимости | `Vacation` | `submit()`, `cancel()`, `recall()`, `submitTransfer()`, `list(viewer)`, `get(viewer, id)` | S4, S6 |
 | **approvals** | экран и решение согласующего, повторная проверка остатка, предупреждения о пересечениях | — | `pending(approver)`, `approve()`, `reject()`, `overlapWarnings()` | S5 |
 | **mail/outbox** | постановка писем в очередь в транзакции, диспетчер отправки и повторов | `OutboxMessage` | `enqueue(tx, message)`, `Dispatcher` (по системным часам) | S4 |
 | **scheduler** | напоминания: идемпотентный проход по Clock, создаёт только строки outbox | — | `pass()` | S7 |
-| **calendar** | read-model календаря: только `APPROVED`, по `visibleTo` | — | `calendar(viewer, from, to)` | S5 |
+| **calendar** | read-model календаря: только `APPROVED`, по `calendarScope` | — | `calendar(viewer, from, to)` | S5 |
 | **hr** | экран HR «Остатки по сотрудникам» и смена даты выхода; таблицу `User` пишет через `org` | — | `balances(viewer)`, `changeHireDate(viewer, id, date)` | S6c |
 | **events** | шина доменных событий и SSE-эндпоинт | — | `publish(event)`, `GET /events` | контракт S1; шина S5; SSE S8 |
 
@@ -336,7 +336,14 @@ scope(viewer) =
   иначе                       ->  { viewer }
 
 canSee(viewer, employeeId) = employeeId ∈ scope(viewer)
+
+calendarScope(viewer) =       (только календарь и его SSE-события; S6-audit, DECISIONS 2026-10-29 09:01)
+  viewer.isHr                 ->  ALL
+  viewer имеет подчинённых    ->  scope(viewer)
+  иначе                       ->  { viewer } ∪ direct(viewer.managerId) ∪ { viewer.managerId }
 ```
+
+`calendarScope` шире `scope` только у сотрудника без подчинённых: коллеги с тем же руководителем и сам руководитель. Заявки, карточки и остатки коллег по-прежнему решает `scope`.
 
 Команда руководителя — только прямые подчинённые, вложенные не входят (§7-3). Заместитель директора видит себя и своих подчинённых; директор — себя и заместителя.
 
@@ -344,12 +351,12 @@ canSee(viewer, employeeId) = employeeId ∈ scope(viewer)
 |---|---|---|
 | Заявки (список, карточка) | сотрудник свои; руководитель свои и прямых подчинённых; HR все (чтение, все статусы) | `canSee(viewer, vacation.employeeId)`; иначе `404` |
 | Заявки на согласование | `approverOf(employee) = viewer`, статус `PENDING` | HR видит здесь только заявки директора |
-| Календарь | сотрудник себя; руководитель подчинённых и себя; HR всех; **только `APPROVED`** | `canSee` + `status = APPROVED` |
+| Календарь | сотрудник себя, коллег с тем же руководителем и руководителя; руководитель подчинённых и себя; HR всех; **только `APPROVED`**; на странице два блока: свои сверху, остальные снизу | `calendarScope` + `status = APPROVED` |
 | Остаток | свой; руководитель — подчинённых; HR — всех | `canSee` |
 | Профиль | только свой | `/me` |
 | Справочник | любой вошедший: `id` + имя, без самого себя | — |
 | Заявка, где я backstopper | **не видна**: роль заменяющего прав на просмотр не даёт | только `canSee` по сотруднику заявки |
-| SSE-событие | зрителю, для которого `canSee(viewer, event.employeeId)` | то же условие на сервере |
+| SSE-событие | календарные события — зрителю, для которого `event.employeeId ∈ calendarScope(viewer)`; остальные — по `canSee` | то же условие на сервере |
 
 `scope(viewer)` вычисляется на каждый запрос и каждое событие по актуальной структуре; в JWT только `sub` (проектное решение).
 
@@ -421,7 +428,7 @@ canSee(viewer, employeeId) = employeeId ∈ scope(viewer)
 | `POST /vacations/{id}/transfer` | владелец, до начала | §5-1, §5-2 | S6 |
 | `GET /hr/balances` | HR | §7-2 | S6c |
 | `PATCH /employees/{id}/hire-date` | HR (в том числе себе) | §6-1 | S6c |
-| `GET /calendar` | любой (по `scope`) | §7-2 | S5 |
+| `GET /calendar` | любой (по `calendarScope`) | §7-2 | S5, S6-audit |
 | `GET /events` | любой (SSE, по `scope`) | §10-2 | S8 |
 
 ### OpenAPI
@@ -992,7 +999,7 @@ components:
 - `POST /vacations/{id}/approve|reject` (S5): ответ `200`. Тело необязательно, в нём только `comment`; любое другое поле даёт `400 VALIDATION_FAILED`. Комментарий хранится обрезанным по краям, пустой - `null` (`decisionComment`). `decidedAt` и момент списания - один момент Clock на запрос. Заявка читается без блокировки (для `employeeId`), затем `User` → `Vacation` `FOR NO KEY UPDATE`, статус и остаток перечитываются ([раздел 6](#6-политика-блокировок)). Нарушение `LedgerEntry_one_debit_per_vacation_idx` даёт `409 ALREADY_PROCESSED`. Событие `vacation.approved` публикуется после коммита; сбой подписчика пишется в лог и не меняет ответ.
 - `GET /hr/balances` (S6c): только HR, иначе `403 FORBIDDEN`; лишний параметр query - `400`. Все пользователи, в том числе HR и директор (`manager = null`), порядок по `fullName`, затем `id`. `balance` - баланс сегодня тем же `BalanceService`, что `/me/balance`, один момент «сегодня» на запрос; может быть отрицательным (§6-4).
 - `PATCH /employees/{id}/hire-date` (S6c; DECISIONS 2026-10-28 19:19): тело только `hireDate` (формат и годы как у всех дат API). Порядок проверок - раздел 8. Транзакция: `User` `FOR NO KEY UPDATE`, та же дата не пишется, иначе `UPDATE hireDate`; журнал, заявки и outbox не меняются (§6-3, §6-6). Ответ `200` - `HrBalanceRow` после коммита. Событие `employee.hire-date-changed` после коммита и только при реальном изменении; та же дата - `200` без события. `accessGranted` не меняется (§6-5, §6-7). Дата в будущем и раньше одобренных отпусков принимается; новые заявки проверяются по новой дате (`NO_ACCRUAL_YET`, `VACATION_BEFORE_HIRE`), согласование повторно проверяет только остаток (DECISIONS 2026-10-28 19:19).
-- `GET /calendar` (S5-e): только `APPROVED` в пределах `scope` зрителя; отпуск попадает, если пересекается с `[from, to]`, даты отдаются полностью; порядок `startDate`, имя, `id`. `from` и `to` обязательны; неверная дата, `from > to` и лишние параметры (в том числе `employeeId`) дают `400 VALIDATION_FAILED`; длина диапазона не ограничена. `balances` есть только у зрителя с прямыми подчинёнными (тот же `BalanceService`, что `/me/balance`), у остальных поля нет. Обновление при перезагрузке или переходе, поток SSE — S8.
+- `GET /calendar` (S5-e; S6-audit — `calendarScope`): только `APPROVED` в пределах `calendarScope` зрителя; отпуск попадает, если пересекается с `[from, to]`, даты отдаются полностью; порядок `startDate`, имя, `id`. `from` и `to` обязательны; неверная дата, `from > to` и лишние параметры (в том числе `employeeId`) дают `400 VALIDATION_FAILED`; длина диапазона не ограничена. `balances` есть только у зрителя с прямыми подчинёнными (тот же `BalanceService`, что `/me/balance`), у остальных поля нет. Обновление при перезагрузке или переходе, поток SSE — S8.
 
 ---
 
