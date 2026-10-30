@@ -118,6 +118,15 @@ describe('JWT (integration, нужен Postgres)', () => {
     expect(res.body.code).toBe('AUTH_TOKEN_EXPIRED');
   });
 
+  // RULES §7-1, §9-1: токен без срока не принимается
+  it('верная подпись без exp -> 401 AUTH_REQUIRED', async () => {
+    const token = signer.sign({}, { subject: String(employee1) });
+    expect(decode(token).payload.exp).toBeUndefined();
+    const res = await me(token);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('AUTH_REQUIRED');
+  });
+
   // RULES §7-1
   it('sub несуществующего пользователя -> 401 AUTH_REQUIRED', async () => {
     const token = signer.sign({}, { subject: '99999', expiresIn: 60 });
