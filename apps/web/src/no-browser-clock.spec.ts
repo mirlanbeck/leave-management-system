@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Исходники приложения (без тестов) читаются как текст.
-const sources = import.meta.glob(['./**/*.{ts,tsx}', '!./**/*.spec.ts'], {
+const sources = import.meta.glob(['./**/*.{ts,tsx}', '!./**/*.spec.{ts,tsx}'], {
   query: '?raw',
   import: 'default',
   eager: true,

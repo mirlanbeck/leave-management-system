@@ -256,6 +256,55 @@ describe('подача заявки: POST /vacations (integration, нужен Po
       expect(res.status).toBe(201);
       expect(res.body.workDays).toBe(5);
     });
+
+    // DECISIONS 2026-10-30 14:24: комментарий не длиннее 400 символов; 2026-10-30 21:41: символ -
+    // единица UTF-16 (как maxLength браузера), длина проверяется до обрезки пробелов
+    describe('длина комментария', () => {
+      const TOO_LONG = { comment: ['comment: не длиннее 400 символов'] };
+
+      // RULES §3-8
+      it('ровно 400 символов - 201, комментарий сохранён целиком', async () => {
+        const comment = 'ж'.repeat(400);
+        const res = await post('employee1', valid({ comment }));
+        expect(res.status).toBe(201);
+        expect(res.body.comment).toBe(comment);
+      });
+
+      // RULES §3-8
+      it('401 символ - 400 VALIDATION_FAILED, заявки и письма нет', async () => {
+        const res = await post(
+          'employee1',
+          valid({ comment: 'ж'.repeat(401) }),
+        );
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe('VALIDATION_FAILED');
+        expect(res.body.details.fields).toEqual(TOO_LONG);
+        expect(await count('Vacation')).toBe(0);
+        expect(await count('OutboxMessage')).toBe(0);
+      });
+
+      // RULES §3-8: эмодзи - две единицы UTF-16
+      it('200 эмодзи проходят, 200 эмодзи и буква - 400', async () => {
+        const emoji = '\u{1F600}'.repeat(200);
+        const over = await post('employee1', valid({ comment: `${emoji}ж` }));
+        expect(over.status).toBe(400);
+        expect(over.body.details.fields).toEqual(TOO_LONG);
+        const ok = await post('employee1', valid({ comment: emoji }));
+        expect(ok.status).toBe(201);
+        expect(ok.body.comment).toBe(emoji);
+      });
+
+      // RULES §3-8: пробелы по краям входят в длину, хотя сохраняется обрезанная строка
+      it('400 букв и пробел - 400', async () => {
+        const res = await post(
+          'employee1',
+          valid({ comment: `${'ж'.repeat(400)} ` }),
+        );
+        expect(res.status).toBe(400);
+        expect(res.body.details.fields).toEqual(TOO_LONG);
+        expect(await count('Vacation')).toBe(0);
+      });
+    });
   });
 
   describe('422: каждый код с текстом каталога (architecture §8)', () => {
