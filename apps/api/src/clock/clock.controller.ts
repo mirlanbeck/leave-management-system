@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Inject, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Put } from '@nestjs/common';
+import { parseApiDate } from '../common/api-date';
 import { ApiError, MESSAGES } from '../common/problem';
 import { APP_ENV } from '../config/app-config';
 import { EventBus } from '../events/event-bus';
@@ -7,7 +8,6 @@ import { Clock } from './clock';
 import { companyLocalToInstant } from './company-time';
 import { companyTz } from './company-tz';
 import { DbClock } from './db-clock';
-import { DemoOnlyGuard } from './demo-only.guard';
 import { SetClockDto } from './dto/set-clock.dto';
 
 export interface ClockView {
@@ -15,8 +15,8 @@ export interface ClockView {
   frozen: boolean;
 }
 
+/** Без DEMO_MODE маршрута нет: 404 даёт DemoOnlyMiddleware (ClockModule, RULES §9-2). */
 @Controller('clock')
-@UseGuards(DemoOnlyGuard)
 export class ClockController {
   constructor(
     private readonly clock: Clock,
@@ -33,11 +33,9 @@ export class ClockController {
   /** Дата и время в поясе компании, сервер переводит в момент UTC (RULES §9-3). */
   @Put()
   async set(@Body() dto: SetClockDto): Promise<ClockView> {
-    const instant = companyLocalToInstant(
-      dto.date,
-      dto.time,
-      companyTz(this.env),
-    );
+    // годы 2000–2100, как у всех дат API (аудит 3, F-4)
+    const date = parseApiDate(dto.date, 'date');
+    const instant = companyLocalToInstant(date, dto.time, companyTz(this.env));
     if (!instant) {
       throw new ApiError(400, 'VALIDATION_FAILED', MESSAGES.VALIDATION_FAILED, {
         fields: { time: ['такой даты или времени нет в поясе компании'] },
