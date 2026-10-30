@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { DemoClockStrip } from '../clock/DemoClockStrip';
+import { LiveEvents } from '../live/LiveEvents';
 import { allowedRoutes, ROUTE_PATHS, ROUTE_TITLES } from '../routes/access';
 
 export function Layout() {
   const { profile, logout } = useAuth();
   return (
-    <>
+    <LiveEvents>
       <DemoClockStrip />
       <header className="topbar">
         <strong>Отпуска</strong>
@@ -28,6 +29,6 @@ export function Layout() {
       <main>
         <Outlet />
       </main>
-    </>
+    </LiveEvents>
   );
 }

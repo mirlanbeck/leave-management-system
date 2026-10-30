@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { describeProblem, toProblem, type ApiProblem } from '../api/problem';
 import { ErrorBox } from '../components/ErrorBox';
+import { reloadPageOnce } from '../live/reload-page';
 import { companyDate, DEFAULT_TIME, formatCompanyMoment, applyClock, loadStrip, type StripData } from './clock-logic';
 
 type State = { kind: 'loading' } | { kind: 'error'; problem: ApiProblem } | StripData;
@@ -49,8 +50,9 @@ function ClockForm(props: { companyTz: string; now: string }) {
     setBusy(true);
     setError(null);
     try {
-      // после установки страница перезагружается: данные на ней считаются по новым часам
-      await applyClock(api, date, time, () => window.location.reload());
+      // после установки страница перезагружается: данные на ней считаются по новым часам;
+      // один раз, хотя clock.changed приходит и в эту вкладку (RULES §10-2)
+      await applyClock(api, date, time, reloadPageOnce);
     } catch (err) {
       setError(toProblem(err));
       setBusy(false);
