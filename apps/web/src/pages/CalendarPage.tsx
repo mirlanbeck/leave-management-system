@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { toProblem, type ApiProblem } from '../api/problem';
@@ -18,13 +18,15 @@ import {
 import { EntryList, MonthGrid } from '../calendar/MonthGrid';
 import { TeamBalances } from '../calendar/TeamBalances';
 import { ErrorBox } from '../components/ErrorBox';
+import { useLiveRefresh } from '../live/useLiveRefresh';
 import { latestOnly } from '../vacation/balance-logic';
 
 /**
  * Календарь (RULES §7-2, §3-11): только одобренные отпуска, кого показать, решает сервер.
  * Два блока: «Мои отпуска» сверху, календарь команды снизу (своих в нём нет).
  * Месяц в `?month=YYYY-MM`, без него — текущий по «сегодня» сервера (GET /me/balance, RULES §9-1).
- * Данные обновляются при перезагрузке и переходе; без перезагрузки — S8 (DECISIONS [S5]).
+ * На события RULES §10-2 и после повторного подключения потока данные перечитываются в фоне:
+ * прежний месяц остаётся на экране, при ошибке рядом с ним ErrorBox (DECISIONS 2026-10-29 21:41).
  */
 export function CalendarPage() {
   const { profile } = useAuth();
@@ -32,7 +34,10 @@ export function CalendarPage() {
   const [today, setToday] = useState<string | null>(null);
   const [data, setData] = useState<{ month: string; calendar: Calendar } | null>(null);
   const [error, setError] = useState<ApiProblem | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const take = useMemo(() => latestOnly(), []);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  useLiveRefresh(reload);
 
   const requested = parseMonth(params.get('month'));
   const month: Month | null = requested ?? (today ? monthOf(today) : null);
@@ -59,7 +64,7 @@ export function CalendarPage() {
       .catch((e: unknown) => {
         if (isLatest()) setError(toProblem(e));
       });
-  }, [key, path, take]);
+  }, [key, path, take, reloadKey]);
 
   const go = (delta: number) => {
     if (month) setParams({ month: monthParam(shiftMonth(month, delta)) });

@@ -4,6 +4,7 @@ import { describeProblem, toProblem, type ApiProblem } from '../api/problem';
 import type { HrBalanceRow } from '../api/types';
 import { oneAtATime } from '../approvals/approval-logic';
 import { ErrorBox } from '../components/ErrorBox';
+import { useLiveRefresh } from '../live/useLiveRefresh';
 import { formatHireDate as formatDate, orEmpty } from '../profile/format';
 import { latestOnly } from '../vacation/balance-logic';
 import { formatDays, isNegativeDays } from '../vacation/format';
@@ -27,6 +28,8 @@ export function EmployeeBalances() {
   const take = useMemo(() => latestOnly(), []);
   const guard = useMemo(() => oneAtATime(), []);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  // в фоне на события §10-2: открытая форма и сообщение §6-3 остаются (RULES §6-3, §10-2)
+  useLiveRefresh(reload);
 
   useEffect(() => {
     const isLatest = take();

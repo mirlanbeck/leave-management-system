@@ -4,6 +4,7 @@ import { toProblem, type ApiProblem } from '../api/problem';
 import type { Vacation } from '../api/types';
 import { decideThenReload, oneAtATime, type DecisionOutcome } from '../approvals/approval-logic';
 import { ErrorBox } from '../components/ErrorBox';
+import { useLiveRefresh } from '../live/useLiveRefresh';
 import { formatHireDate as formatDate } from '../profile/format';
 import { latestOnly } from '../vacation/balance-logic';
 import { marksText, statusLabel } from '../vacation/status';
@@ -25,6 +26,8 @@ export function AllRequests() {
   const take = useMemo(() => latestOnly(), []);
   const guard = useMemo(() => oneAtATime(), []);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  // в фоне только по событиям §10-2: таблица и открытая форма остаются (RULES §11; DECISIONS 2026-10-29 22:26)
+  useLiveRefresh(reload);
 
   useEffect(() => {
     const isLatest = take();
