@@ -61,6 +61,8 @@ export class JwtAuthGuard implements CanActivate {
       throw required();
     }
 
+    // токен без срока не принимается: срок 8 часов обязателен (RULES §9-1)
+    if (typeof exp !== 'number') throw required();
     const id = Number(sub);
     if (!sub || !Number.isInteger(id) || id <= 0) throw required();
     const user = await this.users.findById(id);
