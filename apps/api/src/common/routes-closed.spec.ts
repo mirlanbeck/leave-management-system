@@ -1,6 +1,8 @@
 import { Controller, Get, INestApplication, Post } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
+import request from 'supertest';
+import type { App } from 'supertest/types';
 import { Public } from '../auth/public.decorator';
 import {
   label,
@@ -75,17 +77,50 @@ describe('все маршруты закрыты (RULES §7-1)', () => {
     const probes = await probeWithoutToken(app);
     expect(probes.find((p) => label(p) === 'GET /me')?.status).toBe(401);
   });
+});
 
-  // RULES §7-2, §9-2: Q3 — сначала проверка токена, потом 404 про /clock
-  it('/clock без флага и без токена -> 401', async () => {
-    const off = await createTestApp({});
-    try {
-      const probes = await probeWithoutToken(off);
-      const clock = probes.filter((p) => p.path === '/clock');
-      expect(clock.map((p) => p.status)).toEqual([401, 401]);
-    } finally {
-      await off.close();
-    }
+describe('без DEMO_MODE маршрута /clock нет (RULES §9-2)', () => {
+  let off: INestApplication;
+
+  beforeAll(async () => {
+    off = await createTestApp({});
+  });
+
+  afterAll(() => off.close());
+
+  const answer = async (method: 'get' | 'put', path: string, auth?: string) => {
+    let req = request(off.getHttpServer() as App)[method](path);
+    if (auth) req = req.set('Authorization', auth);
+    const res = await req;
+    return { status: res.status, body: res.body as unknown };
+  };
+
+  // RULES §9-2, §7-1: аудит 3, F-11 — без токена, как неизвестный маршрут
+  it.each(['get', 'put'] as const)(
+    '%s /clock без токена -> 404, как неизвестный маршрут',
+    async (method) => {
+      const unknown = await answer(method, '/no-such-route');
+      expect(unknown.status).toBe(404);
+      expect(await answer(method, '/clock')).toEqual(unknown);
+    },
+  );
+
+  // RULES §9-2: токен не проверяется, маршрута нет
+  it.each(['get', 'put'] as const)(
+    '%s /clock с недействительным токеном -> 404, как неизвестный маршрут',
+    async (method) => {
+      const unknown = await answer(method, '/no-such-route', 'Bearer x');
+      expect(await answer(method, '/clock', 'Bearer x')).toEqual(unknown);
+    },
+  );
+
+  // RULES §7-1: остальные маршруты без флага не задеты
+  it('прочие закрытые маршруты без токена -> 401, открытых ровно три', async () => {
+    const probes = (await probeWithoutToken(off)).filter(
+      (p) => p.path !== '/clock',
+    );
+    expect(openRoutes(probes).map(label)).toEqual([]);
+    expect(publicRoutes(probes)).toEqual([...EXPECTED_PUBLIC].sort());
   });
 });
 
