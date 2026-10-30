@@ -17,7 +17,7 @@ describe('дни на экране', () => {
     expect(isNegativeDays(-3)).toBe(true);
   });
 
-  // RULES §6-4: минус только после сдвига даты выхода, обычный остаток без пометки
+  // RULES §6-4: помечается только отрицательный остаток, обычный без пометки
   it('ноль и положительный остаток не помечаются', () => {
     expect(isNegativeDays(0)).toBe(false);
     expect(isNegativeDays(2.5)).toBe(false);

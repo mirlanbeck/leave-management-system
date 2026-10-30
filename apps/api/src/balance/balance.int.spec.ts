@@ -2,6 +2,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Pool } from 'pg';
 import request from 'supertest';
+import type { App } from 'supertest/types';
 import {
   bearer,
   loginAs,
@@ -143,7 +144,7 @@ describe('GET /me/balance (integration, нужен Postgres)', () => {
     expect(res.body.balance).toBe(37.5 - 5 + 2);
   });
 
-  // RULES §6-4: минус на экране только после сдвига даты выхода
+  // RULES §6-4: может быть отрицательным, здесь после сдвига даты выхода
   it('после сдвига даты выхода остаток может быть отрицательным', async () => {
     const vacation = await insertVacation(pool, {
       employeeId: ids.employee1,
@@ -166,6 +167,54 @@ describe('GET /me/balance (integration, нужен Postgres)', () => {
     expect(patched.status).toBe(200);
     const res = await balance('employee1');
     expect(res.body.balance).toBe(-3);
+  });
+
+  // RULES §6-4, §3-9, §4-4: заявка проходит по «доступно на дату начала», списывается сразу
+  // целиком, поэтому баланс сегодня отрицательный без сдвига даты выхода (аудит 3, F-1)
+  it('после одобрения отпуска в счёт будущих начислений остаток отрицательный', async () => {
+    // 2026-11-02 10:00 по Бишкеку; Сотрудник 3 (выход 12 октября): 1 ноября 1,5, 1 декабря +2,5
+    await setDbClock(pool, '2026-11-02T04:00:00Z');
+    const forecast = await balance('employee3', '?on=2026-12-07');
+    expect(forecast.body.balance).toBe(1.5);
+    expect(forecast.body.availableOn).toBe(4);
+
+    // токены берутся до создания запросов: вход закрывает временный сервер supertest
+    const employee = bearer(await loginAs(app, 'employee3'));
+    const manager = bearer(await loginAs(app, 'manager1'));
+    const hrAuth = bearer(await loginAs(app, 'hr'));
+    const server = app.getHttpServer() as App;
+    const submitted = await request(server)
+      .post('/vacations')
+      .set(employee)
+      .send({
+        startDate: '2026-12-07',
+        endDate: '2026-12-10', // пн–чт, 4 рабочих дня
+        backstopperId: ids.employee1,
+      });
+    expect(submitted.status).toBe(201);
+
+    const approved = await request(server)
+      .post(`/vacations/${submitted.body.id}/approve`)
+      .set(manager);
+    expect(approved.status).toBe(200);
+
+    // 1,5 - 4 = −2,5 на всех экранах остатка
+    expect((await balance('employee3')).body.balance).toBe(-2.5);
+    const hr = await request(server).get('/hr/balances').set(hrAuth);
+    const hrRows = hr.body as { employeeId: number; balance: number }[];
+    expect(hrRows.find((r) => r.employeeId === ids.employee3)?.balance).toBe(
+      -2.5,
+    );
+    const calendar = await request(server)
+      .get('/calendar?from=2026-12-01&to=2026-12-31')
+      .set(manager);
+    const teamRows = calendar.body.balances as {
+      employee: { id: number };
+      balance: number;
+    }[];
+    expect(teamRows.find((r) => r.employee.id === ids.employee3)?.balance).toBe(
+      -2.5,
+    );
   });
 
   // RULES §3-6, §2-3: Сотрудник 3 (выход 12 октября) до 1 ноября дней не имеет

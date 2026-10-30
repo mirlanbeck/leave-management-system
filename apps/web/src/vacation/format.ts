@@ -4,7 +4,7 @@ export function formatDays(days: number): string {
   return days < 0 ? `−${text}` : text;
 }
 
-/** Отрицательный остаток бывает только после сдвига даты выхода и помечается цветом (RULES §6-4). */
+/** Остаток может быть отрицательным; минус помечается цветом (RULES §6-4). */
 export function isNegativeDays(days: number): boolean {
   return days < 0;
 }
