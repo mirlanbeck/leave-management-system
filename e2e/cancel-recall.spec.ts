@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
-import { decideViaApi, loginAs, openFromNav, setDemoClock, submitViaApi } from './helpers';
+import { decideViaApi, loginAs, openFromNav, setDemoClock, submitViaApi, waitLive } from './helpers';
 
 // Отмена и отзыв (S6-a). Данные — фикстуры через API после e2e:reset, часы 2026-10-21 09:00 по Бишкеку.
 // Остаток James (выход 2022-03-15) на 21.10.2026 — 37,5; 1 ноября начисляется ещё 2,5.
@@ -44,12 +44,14 @@ test.describe('Отмена и отзыв', () => {
 
     // После начала: сотрудник отменить не может, HR отзывает с датой выхода 12.11
     await approvedJamesVacation(request);
+    await waitLive(page); // смена часов дойдёт до вкладки James только при открытом потоке
     const hr = await browser.newPage();
     await loginAs(hr, 'emily');
     await setDemoClock(hr, '2026-11-11');
     await openFromNav(hr, 'HR', 'Экран HR');
 
-    await page.reload();
+    // вкладка James перезагружается сама по смене часов в другой вкладке (RULES §10-2)
+    await expect(page.getByTestId('clock-value')).toHaveText('11.11.2026 09:00');
     await expect(today(page)).toHaveText('35'); // 32,5 + начисление 1 ноября
     await expect(myRows(page).first()).toContainText('Одобрена');
     await expect(myRows(page).first().getByRole('button', { name: 'Отменить' })).toHaveCount(0);

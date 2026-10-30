@@ -132,3 +132,53 @@ export async function setDemoClock(page: Page, date: string, time = '09:00') {
   const [y, m, d] = date.split('-');
   await expect(page.getByTestId('clock-value')).toHaveText(`${d}.${m}.${y} ${time}`);
 }
+
+/** Отмена своего отпуска от имени владельца (POST /vacations/{id}/cancel, ожидается 200). */
+export async function cancelViaApi(request: APIRequestContext, login: string, vacationId: number) {
+  const res = await request.post(`/api/vacations/${vacationId}/cancel`, {
+    headers: await authHeaders(request, login),
+    data: {},
+  });
+  expect(res.status()).toBe(200);
+}
+
+/** Отзыв HR из идущего отпуска (POST /vacations/{id}/recall, ожидается 200; RULES §5-5). */
+export async function recallViaApi(request: APIRequestContext, vacationId: number, returnDate: string) {
+  const res = await request.post(`/api/vacations/${vacationId}/recall`, {
+    headers: await authHeaders(request, 'emily'),
+    data: { returnDate },
+  });
+  expect(res.status()).toBe(200);
+}
+
+/** Смена даты выхода от имени HR (PATCH /employees/{id}/hire-date, ожидается 200; RULES §6-1). */
+export async function changeHireDateViaApi(request: APIRequestContext, fullName: string, hireDate: string) {
+  const headers = await authHeaders(request, 'emily');
+  const employees = (await (await request.get('/api/employees', { headers })).json()) as {
+    id: number;
+    fullName: string;
+  }[];
+  const employee = employees.find((e) => e.fullName === fullName);
+  expect(employee, `нет в справочнике: ${fullName}`).toBeDefined();
+  const res = await request.patch(`/api/employees/${employee!.id}/hire-date`, { headers, data: { hireDate } });
+  expect(res.status()).toBe(200);
+}
+
+/**
+ * Ждёт открытого потока GET /events во вкладке (RULES §10-2): адресаты события фиксируются
+ * в момент публикации, действие до подключения вкладка не увидит.
+ */
+export async function waitLive(page: Page, timeout = 5_000) {
+  await expect(page.getByTestId('live-status')).toHaveAttribute('data-live', 'connected', { timeout });
+}
+
+/** Метка в window: исчезает при любой перезагрузке страницы. */
+export async function markNoReload(page: Page) {
+  await page.evaluate(() => {
+    (window as unknown as { __noReload?: boolean }).__noReload = true;
+  });
+}
+
+export async function wasReloaded(page: Page): Promise<boolean> {
+  return page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload !== true);
+}
