@@ -9,6 +9,7 @@ import {
   setDbClock,
 } from '../testing/int-helpers';
 import { createTestApp } from '../testing/test-app';
+import { companyToday } from './company-tz';
 import {
   createPool,
   insertVacation,
@@ -109,6 +110,51 @@ describe('GET/PUT /clock (integration, нужен Postgres)', () => {
       expect(await stored()).toBe('2026-10-24T03:00:00.000Z');
     });
 
+    // RULES §9-2, §9-3: годы как у всех дат API (аудит 3, F-4)
+    it.each(['9999-12-31', '0099-01-01'])(
+      '%s -> 400, текст про годы 2000–2100, часы не меняются',
+      async (date) => {
+        const res = await put({ date, time: '09:00' });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe('VALIDATION_FAILED');
+        expect(res.body.details.fields).toEqual({
+          date: ['date: год от 2000 до 2100'],
+        });
+        expect(await stored()).toBe('2026-10-24T03:00:00.000Z');
+      },
+    );
+
+    const balancesOk = async () => {
+      const hr = await loginAs(app, 'hr');
+      const me = await request(app.getHttpServer())
+        .get('/me/balance')
+        .set(bearer(token));
+      const all = await request(app.getHttpServer())
+        .get('/hr/balances')
+        .set(bearer(hr));
+      return [me.status, all.status];
+    };
+
+    // RULES §9-2, §9-3: нижняя граница; 00:00 по Бишкеку — ещё 1999 год по UTC
+    // (в 2000 году пояс UTC+5 по tzdata), но «сегодня» 2000-01-01
+    it('2000-01-01 00:00 -> 200, остатки считаются', async () => {
+      const res = await put({ date: '2000-01-01', time: '00:00' });
+      expect(res.status).toBe(200);
+      expect(res.body.now).toBe('1999-12-31T19:00:00.000Z');
+      expect(companyToday(new Date(res.body.now), 'Asia/Bishkek')).toBe(
+        '2000-01-01',
+      );
+      expect(await balancesOk()).toEqual([200, 200]);
+    });
+
+    // RULES §9-2, §9-3: верхняя граница, следующее 1-е число в 2101 году
+    it('2100-12-31 23:59 -> 200, остатки считаются', async () => {
+      const res = await put({ date: '2100-12-31', time: '23:59' });
+      expect(res.status).toBe(200);
+      expect(res.body.now).toBe('2100-12-31T17:59:00.000Z');
+      expect(await balancesOk()).toEqual([200, 200]);
+    });
+
     // Одобренный отпуск вт 2026-11-10 – пт 2026-11-13: дата напоминания чт 2026-11-05 (N = 3)
     const approvedVacation = () =>
       insertVacation(pool, {
@@ -207,6 +253,16 @@ describe('GET/PUT /clock (integration, нужен Postgres)', () => {
       expect(put.status).toBe(404);
       expect(put.body.code).toBe('NOT_FOUND');
       expect(await stored()).toBe('2030-01-01T03:00:00.000Z');
+    });
+
+    // RULES §9-2, §7-1: маршрута нет и для анонимного клиента (аудит 3, F-11)
+    it('GET и PUT без токена -> 404 NOT_FOUND', async () => {
+      const get = await request(app.getHttpServer()).get('/clock');
+      const put = await request(app.getHttpServer())
+        .put('/clock')
+        .send({ date: '2026-12-31', time: '09:00' });
+      expect([get.status, get.body.code]).toEqual([404, 'NOT_FOUND']);
+      expect([put.status, put.body.code]).toEqual([404, 'NOT_FOUND']);
     });
 
     // RULES §9-2: 404 раньше проверки тела

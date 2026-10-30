@@ -91,7 +91,7 @@ const ROWS: Row[] = [
     method: 'get',
     path: '/clock',
     demo: false,
-    expected: signedIn(404),
+    expected: signedIn(404, 404), // RULES §9-2: и без токена (аудит 3, F-11)
     rules: '§9-2',
   },
   {
@@ -99,7 +99,7 @@ const ROWS: Row[] = [
     path: '/clock',
     body: CLOCK_BODY,
     demo: false,
-    expected: signedIn(404),
+    expected: signedIn(404, 404), // RULES §9-2: и без токена (аудит 3, F-11)
     rules: '§9-2',
   },
   {
