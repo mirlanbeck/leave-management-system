@@ -327,6 +327,58 @@ describe('согласование: GET /approvals, approve, reject (integration
       expect(res.body.code).toBe('VALIDATION_FAILED');
       expect(await statusOf(id)).toBe('PENDING');
     });
+
+    // DECISIONS 2026-10-30 14:24, 21:41: не длиннее 400 единиц UTF-16, до обрезки пробелов
+    describe.each(['approve', 'reject'] as const)(
+      'длина комментария: %s',
+      (kind) => {
+        // RULES §4-1
+        it('ровно 400 символов - 200, decisionComment сохранён целиком', async () => {
+          const id = await vacation('employee1');
+          const comment = 'ж'.repeat(400);
+          const res = await decide('manager1', id, kind, { comment });
+          expect(res.status).toBe(200);
+          expect(res.body.decisionComment).toBe(comment);
+        });
+
+        // RULES §4-1
+        it('401 символ - 400 VALIDATION_FAILED, решения, списания и письма нет', async () => {
+          const id = await vacation('employee1');
+          const res = await decide('manager1', id, kind, {
+            comment: 'ж'.repeat(401),
+          });
+          expect(res.status).toBe(400);
+          expect(res.body.code).toBe('VALIDATION_FAILED');
+          expect(res.body.details.fields).toEqual({
+            comment: ['comment: не длиннее 400 символов'],
+          });
+          const row = (
+            await pool.query(
+              `SELECT status, "decidedAt", "decisionComment" FROM "Vacation" WHERE id = $1`,
+              [id],
+            )
+          ).rows[0];
+          expect(row).toEqual({
+            status: 'PENDING',
+            decidedAt: null,
+            decisionComment: null,
+          });
+          expect(await debits(id)).toEqual([]);
+          const mail = await pool.query(`SELECT id FROM "OutboxMessage"`);
+          expect(mail.rows).toEqual([]);
+        });
+
+        // RULES §4-1; architecture §8: VALIDATION_FAILED раньше проверки согласующего
+        it('401 символ от не согласующего - 400, а не 403/404', async () => {
+          const id = await vacation('employee1');
+          const res = await decide('manager2', id, kind, {
+            comment: 'ж'.repeat(401),
+          });
+          expect(res.status).toBe(400);
+          expect(res.body.code).toBe('VALIDATION_FAILED');
+        });
+      },
+    );
   });
 
   describe('доступ и порядок ошибок', () => {

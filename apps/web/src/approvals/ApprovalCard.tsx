@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api';
 import type { ApprovalItem } from '../api/types';
+import { COMMENT_MAX_LENGTH } from '../components/comment';
 import { orEmpty } from '../profile/format';
 import {
   availableText,
@@ -91,7 +92,13 @@ export function ApprovalCard({ item, onReload, onOutcome }: Props) {
       {(buttons.approveVisible || buttons.rejectVisible) && (
         <div className="decision">
           <label htmlFor={commentId}>Комментарий к решению (необязательно)</label>
-          <textarea id={commentId} value={comment} onChange={(e) => setComment(e.target.value)} rows={2} />
+          <textarea
+            id={commentId}
+            maxLength={COMMENT_MAX_LENGTH}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows={2}
+          />
           <div className="decision-buttons">
             {buttons.approveVisible && (
               <button type="button" disabled={!buttons.approveEnabled} onClick={() => decide('approve')}>

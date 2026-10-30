@@ -247,6 +247,37 @@ describe('перенос: POST /vacations/{id}/transfer, блокировки и
       await transfer('employee1', id);
       expect(publish).not.toHaveBeenCalled();
     });
+
+    // DECISIONS 2026-10-30 14:24, 21:41: не длиннее 400 единиц UTF-16, до обрезки пробелов
+    describe('длина комментария', () => {
+      // RULES §5-2, §3-8
+      it('ровно 400 символов - 201, комментарий сохранён целиком', async () => {
+        const { id } = await vacation('employee1');
+        const comment = 'ж'.repeat(400);
+        const res = await transfer('employee1', id, { comment });
+        expect(res.status).toBe(201);
+        expect(res.body.comment).toBe(comment);
+      });
+
+      // RULES §5-2, §3-8
+      it('401 символ - 400 VALIDATION_FAILED, переноса и письма нет', async () => {
+        const { id } = await vacation('employee1');
+        const res = await transfer('employee1', id, {
+          comment: 'ж'.repeat(401),
+        });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe('VALIDATION_FAILED');
+        expect(res.body.details.fields).toEqual({
+          comment: ['comment: не длиннее 400 символов'],
+        });
+        const rows = await pool.query(`SELECT id FROM "Vacation"`);
+        expect(rows.rows).toEqual([{ id }]);
+        expect(await mailCount()).toBe(0);
+        expect((await get('employee1', `/vacations/${id}`)).body).toMatchObject(
+          { status: 'APPROVED', transferPending: false },
+        );
+      });
+    });
   });
 
   describe('правила новых дат', () => {

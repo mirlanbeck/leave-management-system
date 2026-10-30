@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { toProblem, type ApiProblem } from '../api/problem';
 import type { EmployeeRef, Vacation } from '../api/types';
+import { COMMENT_MAX_LENGTH } from '../components/comment';
 import { ErrorBox } from '../components/ErrorBox';
 import { singleFlight, toVacationInput, type VacationFormValues } from './submit-logic';
 import { initialTransferForm, transferHint } from './transfer-logic';
@@ -85,7 +86,13 @@ export function TransferForm({ vacation, onTransferred, onClose }: Props) {
         ))}
       </select>
       <label htmlFor={id('comment')}>Комментарий (необязательно)</label>
-      <textarea id={id('comment')} rows={2} value={values.comment} onChange={(e) => set({ comment: e.target.value })} />
+      <textarea
+        id={id('comment')}
+        rows={2}
+        maxLength={COMMENT_MAX_LENGTH}
+        value={values.comment}
+        onChange={(e) => set({ comment: e.target.value })}
+      />
       <span className="muted">{transferHint(vacation.workDays)}</span>
       <div className="decision-buttons">
         {/* двойной клик не даёт второго запроса (RULES §10-1) */}

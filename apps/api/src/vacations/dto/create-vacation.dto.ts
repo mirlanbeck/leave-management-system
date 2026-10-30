@@ -1,4 +1,5 @@
 import { IsInt, IsOptional, IsString } from 'class-validator';
+import { MaxCommentLength } from '../../common/comment-length';
 
 /**
  * Тело подачи заявки (architecture §7, VacationInput). Даты проверяет `parseApiDates`.
@@ -18,5 +19,6 @@ export class CreateVacationDto {
 
   @IsOptional()
   @IsString()
+  @MaxCommentLength()
   comment?: string | null;
 }
