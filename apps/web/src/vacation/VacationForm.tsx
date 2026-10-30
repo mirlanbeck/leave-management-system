@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { toProblem, type ApiProblem } from '../api/problem';
 import type { EmployeeRef, Vacation } from '../api/types';
+import { COMMENT_MAX_LENGTH } from '../components/comment';
 import { ErrorBox } from '../components/ErrorBox';
 import { formatHireDate as formatDate } from '../profile/format';
 import { singleFlight, toVacationInput, type VacationFormValues } from './submit-logic';
@@ -93,7 +94,12 @@ export function VacationForm(props: {
         </label>
         <label className="comment">
           Комментарий
-          <textarea rows={3} value={values.comment} onChange={(e) => set({ comment: e.target.value })} />
+          <textarea
+            rows={3}
+            maxLength={COMMENT_MAX_LENGTH}
+            value={values.comment}
+            onChange={(e) => set({ comment: e.target.value })}
+          />
         </label>
         <button type="submit" disabled={busy}>
           Подать
