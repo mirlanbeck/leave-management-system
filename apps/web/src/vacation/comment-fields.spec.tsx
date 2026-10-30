@@ -25,9 +25,12 @@ function vacation(over: Partial<Vacation> = {}): Vacation {
   };
 }
 
-/** Атрибуты maxlength всех textarea в разметке (useEffect при рендере на сервере не выполняется). */
+/**
+ * Атрибуты maxlength всех textarea в разметке (useEffect при рендере на сервере не выполняется).
+ * React пишет имя как maxLength; в HTML регистр имени атрибута не важен.
+ */
 function textareaMaxLengths(html: string): (string | null)[] {
-  return [...html.matchAll(/<textarea\b[^>]*>/g)].map((m) => /\bmaxlength="(\d+)"/.exec(m[0])?.[1] ?? null);
+  return [...html.matchAll(/<textarea\b[^>]*>/g)].map((m) => /\bmaxlength="(\d+)"/i.exec(m[0])?.[1] ?? null);
 }
 
 // DECISIONS 2026-10-30 14:24: у полей комментария maxLength 400; 21:41: браузер считает единицы UTF-16, как сервер
