@@ -177,4 +177,29 @@ describe('POST /auth/login (integration, нужен Postgres)', () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('VALIDATION_FAILED');
   });
+
+  // RULES §7-1: bcrypt учитывает только 72 байта; граница в байтах UTF-8, не в символах
+  it.each([
+    ['латиница 72 символа', 'a'.repeat(72)],
+    ['кириллица 36 символов', 'ж'.repeat(36)],
+  ])('72 байта (%s): валидацию проходит, 401', async (_, password) => {
+    const res = await post('ok', password);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('AUTH_INVALID_CREDENTIALS');
+  });
+
+  // RULES §7-1
+  it.each([
+    ['латиница 73 символа', 'a'.repeat(73)],
+    ['кириллица 37 символов', 'ж'.repeat(37)],
+  ])('больше 72 байт (%s) -> 400 VALIDATION_FAILED', async (_, password) => {
+    const res = await post('ok', password);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION_FAILED');
+    expect(res.body.details.fields).toEqual({
+      password: [
+        'password: не длиннее 72 байт (латиница — до 72 символов, кириллица — до 36)',
+      ],
+    });
+  });
 });
