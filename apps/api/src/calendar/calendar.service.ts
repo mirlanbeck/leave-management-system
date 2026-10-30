@@ -18,7 +18,7 @@ export interface CalendarEntry {
 
 export interface CalendarBalance {
   employee: EmployeeRef;
-  /** Дни кратно 0,5; минус только после сдвига даты выхода (RULES §6-4). */
+  /** Дни кратно 0,5; может быть отрицательным (RULES §6-4). */
   balance: number;
 }
 

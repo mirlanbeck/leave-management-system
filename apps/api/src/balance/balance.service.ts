@@ -18,7 +18,7 @@ type LedgerDb = Pick<Prisma.TransactionClient, 'ledgerEntry'>;
 export interface BalanceView {
   employeeId: number;
   today: CalendarDate;
-  /** Дни кратно 0,5; минус только после сдвига даты выхода (RULES §6-4). */
+  /** Дни кратно 0,5; может быть отрицательным (RULES §6-4). */
   balance: number;
   on: CalendarDate | null;
   availableOn: number | null;

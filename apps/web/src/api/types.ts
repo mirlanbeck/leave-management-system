@@ -113,7 +113,7 @@ export interface HrBalanceRow {
   teamName: string | null;
   manager: EmployeeRef | null;
   hireDate: string;
-  /** Остаток на сегодня; минус только после сдвига даты выхода (RULES §6-4). */
+  /** Остаток на сегодня; может быть отрицательным (RULES §6-4). */
   balance: number;
 }
 
