@@ -582,7 +582,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Vacation" }
-        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED (в том числе comment длиннее 400)
         "422": { $ref: "#/components/responses/Problem" }   # правила §3 (раздел 8)
     get:
       tags: [vacations]
@@ -682,7 +682,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Vacation" }
-        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED: неверная дата, лишнее поле (в том числе workDays)
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED: неверная дата, лишнее поле (в том числе workDays), comment длиннее 400
         "403": { $ref: "#/components/responses/Problem" }   # FORBIDDEN (не владелец)
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }   # ALREADY_PROCESSED (исходный CANCELLED/REPLACED), TRANSFER_ALREADY_PENDING
@@ -722,6 +722,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Vacation" }
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED: лишнее поле, comment не строка или длиннее 400
         "403": { $ref: "#/components/responses/Problem" }   # NOT_APPROVER, APPROVE_OWN_REQUEST
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }   # ALREADY_PROCESSED
@@ -743,6 +744,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Vacation" }
+        "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED: лишнее поле, comment не строка или длиннее 400
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
@@ -890,11 +892,18 @@ components:
             Обязателен по RULES §3-2 (и для переноса), но не required в схеме: отсутствие или null
             дают 422 BACKSTOPPER_REQUIRED, а не 400; целое вне 1…2147483647 - 422 BACKSTOPPER_NOT_FOUND
             (DECISIONS [S4])
-        comment: { type: string, nullable: true, description: "обязателен, если начало раньше сегодня; хранится обрезанным по краям, пустой - null" }
+        comment:
+          type: string
+          nullable: true
+          maxLength: 400
+          description: >
+            Обязателен, если начало раньше сегодня. Не длиннее 400 единиц UTF-16 (эмодзи - 2), длина
+            проверяется до обрезки, иначе 400 VALIDATION_FAILED с details.fields.comment. Хранится
+            обрезанным по краям, пустой - null (DECISIONS 2026-10-30 14:24, 21:41)
     Decision:
       type: object
       properties:
-        comment: { type: string, nullable: true }
+        comment: { type: string, nullable: true, maxLength: 400, description: "как VacationInput.comment: не длиннее 400 единиц UTF-16 до обрезки" }
     Vacation:
       type: object
       required: [id, employee, backstopper, startDate, endDate, workDays, status, createdAt, transferPending, oldVacationKept, actions]
@@ -993,7 +1002,7 @@ components:
 - `GET /vacations?scope=team` без прямых подчинённых и `scope=all` не для HR дают `403 FORBIDDEN`; неизвестные `scope`, `status` и лишние параметры query дают `400 VALIDATION_FAILED`. Список отсортирован по `id` по убыванию.
 - `GET /me/balance`: `balance` в днях кратно 0,5; без `on` поля `on` и `availableOn` равны `null`.
 - `GET /employees` не включает вошедшего: сервер сам исключает его, а `POST /vacations` дополнительно отклоняет `backstopperId` заявителя.
-- `POST /vacations` (S4): поля тела только `startDate`, `endDate`, `backstopperId`, `comment`; любое другое (в том числе `workDays`, `employeeId`, `status`) даёт `400 VALIDATION_FAILED`. Неверные обе даты попадают в `details.fields` вместе. `workDays` считает сервер. Комментарий хранится обрезанным по краям, пустой - `null`. `createdAt` заявки и письма - один момент Clock на запрос. Проверки, заявка и письмо `NEW_REQUEST` - в одной транзакции под `User ... FOR NO KEY UPDATE` ([раздел 6](#6-политика-блокировок)); проверки в одном месте, `evaluateSubmission` ([vacation-rules.ts](apps/api/src/vacations/vacation-rules.ts)).
+- `POST /vacations` (S4): поля тела только `startDate`, `endDate`, `backstopperId`, `comment`; любое другое (в том числе `workDays`, `employeeId`, `status`) даёт `400 VALIDATION_FAILED`. Неверные обе даты попадают в `details.fields` вместе. `workDays` считает сервер. Комментарий не длиннее 400 единиц UTF-16 до обрезки, иначе `400 VALIDATION_FAILED`. Комментарий хранится обрезанным по краям, пустой - `null`. `createdAt` заявки и письма - один момент Clock на запрос. Проверки, заявка и письмо `NEW_REQUEST` - в одной транзакции под `User ... FOR NO KEY UPDATE` ([раздел 6](#6-политика-блокировок)); проверки в одном месте, `evaluateSubmission` ([vacation-rules.ts](apps/api/src/vacations/vacation-rules.ts)).
 - `POST /vacations/{id}/transfer` принимает те же поля, что подача; `backstopperId` обязателен (форма подставляет прежнего). `workDays` рассчитывается сервером, не принимается от клиента.
 - Одноразовое сообщение HR «Дата изменена. Проверьте одобренные отпуска этого сотрудника» формирует интерфейс; сервер его не хранит (RULES §6-3).
 - `actions` — подсказка для показа кнопок, не источник прав. С S5: `approve`, `reject` у согласующего, пока заявка `PENDING` (автору не показываются). С S6a: `cancel` у владельца, пока заявка `PENDING` или `APPROVED` и сегодня < даты начала; `recall` у HR, пока отпуск `APPROVED` и начало ≤ сегодня ≤ окончание (в том числе над своим). Подсказку дают те же функции, что проверки сервера ([cancel-rules.ts](apps/api/src/vacations/cancel-rules.ts), [vacation-rules.ts](apps/api/src/vacations/vacation-rules.ts)). С S6b: `transfer` у владельца, пока отпуск `APPROVED`, сегодня < даты начала и переноса «На согласовании» нет; пока перенос ждёт решения, у старого отпуска нет `cancel`, `transfer` и `recall`.
@@ -1001,7 +1010,7 @@ components:
 - `POST /vacations/{id}/transfer` (S6b): ответ `201`, заявка `PENDING` с `replacesId`, `workDays` старого отпуска, `createdAt` по Clock. Заявка читается без блокировки (для `employeeId`), затем `User` → исходный `Vacation` `FOR NO KEY UPDATE`; статус исходного и наличие преемника `PENDING` перечитываются под блокировкой ([раздел 6](#6-политика-блокировок)). Пересечения ищутся среди `PENDING` и `APPROVED` сотрудника без исходного отпуска. Проверки в одном месте: `transferSourceError` и `evaluateTransfer` ([vacation-rules.ts](apps/api/src/vacations/vacation-rules.ts)). `TRANSFER_WORKDAYS_MISMATCH`: `details = {old, requested}`. Письмо `NEW_REQUEST` тем же шаблоном, что подача (DECISIONS 2026-10-21 14:52). Нарушение `Vacation_single_live_successor_idx` даёт `409 TRANSFER_ALREADY_PENDING`. Событий нет.
 - Перенос в `approve`/`reject` (S6b): `replacesId` читается до блокировки, затем `User` → `Vacation {replacesId, id}` по возрастанию id. Утверждение: остаток не проверяется, `DEBIT` нет; сначала старый `APPROVED → REPLACED`, затем перенос `APPROVED`; хук `onVacationApproved` ставит одно письмо `DECISION`; после коммита `vacation.transfer-approved` (вместо `vacation.approved`). Старый уже начался — `422 TRANSFER_APPROVE_AFTER_START`, статусы не меняются. Отклонение — как у обычной заявки, событий нет. В `GET /approvals` у переноса `availableOnStart = null`, `canApprove`/`blockReason` по `TRANSFER_APPROVE_AFTER_START`, в `overlaps` нет переносимого отпуска.
 - `GET /approvals` (S5): руководитель видит `PENDING` своих прямых подчинённых, HR — заявки директора; без подчинённых и не HR — `403 FORBIDDEN`. Порядок по `id`, старые сверху. `availableOnStart` считает тот же `BalanceService`, что `/me/balance?on=` и проверка при согласовании; `blockReason` совпадает с телом ответа `approve` при нехватке дней.
-- `POST /vacations/{id}/approve|reject` (S5): ответ `200`. Тело необязательно, в нём только `comment`; любое другое поле даёт `400 VALIDATION_FAILED`. Комментарий хранится обрезанным по краям, пустой - `null` (`decisionComment`). `decidedAt` и момент списания - один момент Clock на запрос. Заявка читается без блокировки (для `employeeId`), затем `User` → `Vacation` `FOR NO KEY UPDATE`, статус и остаток перечитываются ([раздел 6](#6-политика-блокировок)). Нарушение `LedgerEntry_one_debit_per_vacation_idx` даёт `409 ALREADY_PROCESSED`. Событие `vacation.approved` публикуется после коммита; сбой подписчика пишется в лог и не меняет ответ.
+- `POST /vacations/{id}/approve|reject` (S5): ответ `200`. Тело необязательно, в нём только `comment`; любое другое поле даёт `400 VALIDATION_FAILED`. Комментарий не длиннее 400 единиц UTF-16 до обрезки, иначе `400 VALIDATION_FAILED`. Комментарий хранится обрезанным по краям, пустой - `null` (`decisionComment`). `decidedAt` и момент списания - один момент Clock на запрос. Заявка читается без блокировки (для `employeeId`), затем `User` → `Vacation` `FOR NO KEY UPDATE`, статус и остаток перечитываются ([раздел 6](#6-политика-блокировок)). Нарушение `LedgerEntry_one_debit_per_vacation_idx` даёт `409 ALREADY_PROCESSED`. Событие `vacation.approved` публикуется после коммита; сбой подписчика пишется в лог и не меняет ответ.
 - `GET /hr/balances` (S6c): только HR, иначе `403 FORBIDDEN`; лишний параметр query - `400`. Все пользователи, в том числе HR и директор (`manager = null`), порядок по `fullName`, затем `id`. `balance` - баланс сегодня тем же `BalanceService`, что `/me/balance`, один момент «сегодня» на запрос; может быть отрицательным (§6-4).
 - `PATCH /employees/{id}/hire-date` (S6c; DECISIONS 2026-10-28 19:19): тело только `hireDate` (формат и годы как у всех дат API). Порядок проверок - раздел 8. Транзакция: `User` `FOR NO KEY UPDATE`, та же дата не пишется, иначе `UPDATE hireDate`; журнал, заявки и outbox не меняются (§6-3, §6-6). Ответ `200` - `HrBalanceRow` после коммита. Событие `employee.hire-date-changed` после коммита и только при реальном изменении; та же дата - `200` без события. `accessGranted` не меняется (§6-5, §6-7). Дата в будущем и раньше одобренных отпусков принимается; новые заявки проверяются по новой дате (`NO_ACCRUAL_YET`, `VACATION_BEFORE_HIRE`), согласование повторно проверяет только остаток (DECISIONS 2026-10-28 19:19).
 - `GET /calendar` (S5-e; S6-audit — `calendarScope`): только `APPROVED` в пределах `calendarScope` зрителя; отпуск попадает, если пересекается с `[from, to]`, даты отдаются полностью; порядок `startDate`, имя, `id`. `from` и `to` обязательны; неверная дата, `from > to` и лишние параметры (в том числе `employeeId`) дают `400 VALIDATION_FAILED`; длина диапазона не ограничена. `balances` есть только у зрителя с прямыми подчинёнными (тот же `BalanceService`, что `/me/balance`), у остальных поля нет. Об изменениях сервер сообщает событиями `GET /events` ([раздел 9](#9-события-и-sse)), данные клиент перечитывает этим же запросом.
@@ -1099,7 +1108,7 @@ components:
 - **Отмена** (DECISIONS 2026-10-28 15:41): `VALIDATION_FAILED` → `NOT_FOUND` → `FORBIDDEN` (не владелец) → `ALREADY_PROCESSED` (статус не `PENDING` и не `APPROVED`) → `PENDING_TRANSFER_BLOCKS` → `CANCEL_STARTED_BY_EMPLOYEE` (`APPROVED`, сегодня ≥ начала) или `CANCEL_PENDING_AFTER_START` (`PENDING`, сегодня ≥ начала).
 - **Отзыв** (DECISIONS 2026-10-28 15:41): `VALIDATION_FAILED` → `NOT_FOUND` → `FORBIDDEN` (не HR) → `ALREADY_PROCESSED` (`CANCELLED`, `REPLACED`) → `RECALL_NOT_APPROVED` (`PENDING`, `REJECTED`) → `RECALL_NOT_STARTED` → `RECALL_FINISHED` → `PENDING_TRANSFER_BLOCKS` → `RECALL_DATE_OUT_OF_RANGE`.
 - **Смена даты выхода** (DECISIONS 2026-10-28 19:19): `VALIDATION_FAILED` (тело, затем формат и годы даты) → `NOT_FOUND` (некорректный, несуществующий или невидимый зрителю id) → `FORBIDDEN` (виден, но не HR). HR меняет дату и себе.
-- **Согласование:** `NOT_FOUND` (невидимая, несуществующая, некорректный id) → `APPROVE_OWN_REQUEST` (автор) → `NOT_APPROVER` → `ALREADY_PROCESSED` → `TRANSFER_APPROVE_AFTER_START` (перенос) или `APPROVE_INSUFFICIENT_BALANCE` (обычная заявка). Текст `APPROVE_INSUFFICIENT_BALANCE` оформлен как `INSUFFICIENT_BALANCE`: дни через запятую, минус типографский, в `details.available` и `details.requested` числа (DECISIONS 2026-10-26 10:47).
+- **Согласование:** `VALIDATION_FAILED` (тело) → `NOT_FOUND` (невидимая, несуществующая, некорректный id) → `APPROVE_OWN_REQUEST` (автор) → `NOT_APPROVER` → `ALREADY_PROCESSED` → `TRANSFER_APPROVE_AFTER_START` (перенос) или `APPROVE_INSUFFICIENT_BALANCE` (обычная заявка). Текст `APPROVE_INSUFFICIENT_BALANCE` оформлен как `INSUFFICIENT_BALANCE`: дни через запятую, минус типографский, в `details.available` и `details.requested` числа (DECISIONS 2026-10-26 10:47).
 
 ### Соответствие ограничениям БД
 
@@ -1322,6 +1331,7 @@ pass():
 32. Экран HR в S6c: раздел «Остатки по сотрудникам» после «Все заявки», форма смены даты в строке, предупреждение при вводе, разовое сообщение только в состоянии страницы (DECISIONS 2026-10-28 19:19).
 33. SSE: событие `clock.changed` после установки демо-часов и прохода планировщика, всем вошедшим; одна очередь событий на сервере; keep-alive 25 с; закрытие потока в момент `exp` токена; закрытие потоков при остановке и `enableShutdownHooks()` (S8, раздел 9; DECISIONS 2026-10-29 21:18, 22:26).
 34. Демо-часы: без `DEMO_MODE` маршрут `/clock` закрывает `DemoOnlyMiddleware` раньше guard'ов, флаг читается из `APP_ENV`; `PUT /clock` проверяет дату через `parseApiDate` (годы 2000–2100, как все даты API) до перевода в момент UTC (S9-c, разделы 7, 8; DECISIONS 2026-10-30 14:24; аудит 3, F-4, F-11).
+35. Комментарий заявки, переноса и решения не длиннее 400 единиц UTF-16, как `maxLength` браузера. `@MaxLength` не используется: он считает суррогатную пару за один символ. Длина проверяется до обрезки пробелов. Проверка в DTO (`MaxCommentLength`), поэтому `VALIDATION_FAILED` идёт первым (S9-d, разделы 7, 8; DECISIONS 2026-10-30 14:24, 21:41; аудит 3, F-7).
 
 ### Известные ограничения
 
@@ -1341,3 +1351,4 @@ pass():
 - HR меняет свою дату выхода без отдельного контроля (DECISIONS 2026-10-28 19:19).
 - После сдвига даты выхода согласование не проверяет «начало не раньше даты выхода» (§3-12): отпуск, начавшийся раньше новой даты, может быть одобрен, если хватает остатка (DECISIONS 2026-10-28 19:19).
 - Неизвестный маршрут без токена отвечает `404`, существующий `401`: по этому видны существующие маршруты. Контракт API открыт (этот документ), данных это не раскрывает; принято в S3, пересмотрено в S9 и оставлено (DECISIONS 2026-10-30 14:24, issue #2). Исключение — `/clock` без `DEMO_MODE`: `404` и без токена.
+- Длина комментария ограничена только в API: в БД ограничения нет, seed и SQL в обход API его не соблюдают (S9-d).
