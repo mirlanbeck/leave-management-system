@@ -32,10 +32,12 @@ export async function resetMailpit() {
 
 // Демо-часы после сброса: фиксированный момент, чтобы результаты e2e не зависели от даты запуска
 // (RULES §9-6). 2026-10-21 09:00 по Бишкеку (UTC+6) — дата из README для демо. Сценарий,
-// которому нужна другая дата, ставит часы сам. Часы выставляются до seed: от них зависит accessGranted.
+// которому нужна другая дата, ставит часы формой (setDemoClock, PUT /clock). Прямая запись
+// в ClockState — только здесь, до seed: пользователей ещё нет, от часов зависит accessGranted
+// (DECISIONS 2026-10-30 14:24).
 export const E2E_CLOCK = '2026-10-21T03:00:00Z';
 
-export async function setClock(instant = E2E_CLOCK) {
+async function setClock(instant = E2E_CLOCK) {
   const client = new pg.Client({ connectionString: DATABASE_URL });
   await client.connect();
   try {

@@ -8,16 +8,18 @@ import {
   markNoReload,
   openFromNav,
   recallViaApi,
+  setDemoClock,
   submitViaApi,
   waitLive,
   wasReloaded,
 } from './helpers';
-import { setClock } from './reset.mjs';
 
 // Обновление без перезагрузки (S8, RULES §7-4, §10-2): у каждого пользователя свой контекст
 // браузера (токен в sessionStorage), изменения - из другого контекста или через API.
 // Часы после e2e:reset 21.10.2026 09:00; отпуска в ноябре.
 const entries = (page: Page) => page.getByTestId('calendar-team').getByTestId('calendar-entry');
+const mine = (page: Page) => page.getByTestId('calendar-mine').getByTestId('calendar-entry');
+const teamEmpty = (page: Page) => page.getByTestId('calendar-team').getByTestId('calendar-empty');
 const JAMES_NOV = 'James Walker, Фронт-отдел: 09.11.2026–13.11.2026';
 const GRACE_NOV = 'Grace Morgan, Бэк-отдел: 16.11.2026–20.11.2026';
 
@@ -36,8 +38,7 @@ async function userPage(browser: Browser, login: string): Promise<Page> {
 }
 
 /** Ноябрь в «Календаре», поток подключён, метка «без перезагрузки» поставлена. */
-async function watchNovember(browser: Browser, login: string): Promise<Page> {
-  const page = await userPage(browser, login);
+async function openNovember(page: Page): Promise<Page> {
   await page.goto('/calendar?month=2026-11');
   await expect(page.getByTestId('calendar-month')).toHaveText('Ноябрь 2026');
   await waitLive(page);
@@ -45,8 +46,13 @@ async function watchNovember(browser: Browser, login: string): Promise<Page> {
   return page;
 }
 
+async function watchNovember(browser: Browser, login: string): Promise<Page> {
+  return openNovember(await userPage(browser, login));
+}
+
 test.describe('живое обновление календаря и экрана HR', () => {
-  // RULES §7-4, §7-2, §10-2: PDF «Календарь команды обновляется у всех, кто его смотрит, без обновления страницы»
+  // RULES §7-4, §7-2, §10-2: PDF «Календарь команды обновляется у всех, кто его смотрит, без обновления страницы»;
+  // аудит 3, F-9: коллега-сотрудник, «Мои отпуска» автора, одобрение из второго клиента
   test('Календарь команды обновляется у всех, кто его смотрит, без обновления страницы', async ({
     browser,
     request,
@@ -54,20 +60,35 @@ test.describe('живое обновление календаря и экран�
     const daniel = await watchNovember(browser, 'daniel');
     const emily = await watchNovember(browser, 'emily');
     const olivia = await watchNovember(browser, 'olivia');
-    for (const p of [daniel, emily, olivia]) {
-      await expect(p.getByTestId('calendar-team').getByTestId('calendar-empty')).toBeVisible();
-    }
+    const sophie = await watchNovember(browser, 'sophie');
+    const author = await watchNovember(browser, 'james');
+    const viewers = [daniel, emily, olivia, sophie, author];
+    for (const p of viewers) await expect(teamEmpty(p)).toBeVisible();
+    await expect(author.getByTestId('calendar-mine').getByTestId('calendar-empty')).toBeVisible();
     await expect(daniel.getByTestId('team-balance').filter({ hasText: 'James Walker' })).toContainText('37,5');
 
-    // подача календарь не меняет; одобрение - у руководителя 1 и HR, руководителю 2 не видно
-    const james = await submitViaApi(request, 'james', {
+    // подача календарь не меняет; одобрение - во второй вкладке руководителя 1, экран «Согласование»
+    await submitViaApi(request, 'james', {
       startDate: '2026-11-09',
       endDate: '2026-11-13',
       backstopper: 'Sophie Bennett',
     });
-    await decideViaApi(request, 'daniel', james, 'approve');
+    const approver = await daniel.context().newPage();
+    await loginAs(approver, 'daniel');
+    await openFromNav(approver, 'Согласование');
+    await approver
+      .getByTestId('approval-card')
+      .filter({ hasText: 'James Walker' })
+      .getByRole('button', { name: 'Подтвердить' })
+      .click();
+    await expect(approver.getByTestId('approvals-outcome')).toHaveText('Заявка James Walker одобрена');
+
+    // у руководителя 1, HR и коллеги в календаре команды, у автора в «Моих отпусках»; руководителю 2 не видно
     await expect(entries(daniel)).toHaveText([JAMES_NOV]);
     await expect(entries(emily)).toHaveText([JAMES_NOV]);
+    await expect(entries(sophie)).toHaveText([JAMES_NOV]);
+    await expect(mine(author)).toHaveText([JAMES_NOV]);
+    await expect(teamEmpty(author)).toBeVisible();
 
     // следующее событие видно olivia: если бы отпуск james дошёл до неё, он пришёл бы раньше
     const grace = await submitViaApi(request, 'grace', {
@@ -79,11 +100,13 @@ test.describe('живое обновление календаря и экран�
     await expect(entries(olivia)).toHaveText([GRACE_NOV]);
     await expect(entries(emily)).toHaveText([JAMES_NOV, GRACE_NOV]);
     await expect(entries(daniel)).toHaveText([JAMES_NOV]);
+    await expect(entries(sophie)).toHaveText([JAMES_NOV]);
+    await expect(teamEmpty(author)).toBeVisible();
 
     // остатки команды у руководителя тоже перечитаны: James 37,5 - 5
     await expect(daniel.getByTestId('team-balance').filter({ hasText: 'James Walker' })).toContainText('32,5');
 
-    for (const p of [daniel, emily, olivia]) expect(await wasReloaded(p)).toBe(false);
+    for (const p of viewers) expect(await wasReloaded(p)).toBe(false);
   });
 
   // RULES §5-5, §6-3, §10-2 (аудит 2, F-2): отмена и отзыв убирают отпуск без перезагрузки;
@@ -110,10 +133,12 @@ test.describe('живое обновление календаря и экран�
       backstopper: 'Henry Price',
     });
     await decideViaApi(request, 'olivia', grace, 'approve');
-    // 11.11.2026: отпуска 09–13 ноября идут, отпуск 23–27 ещё не начался (без события clock.changed)
-    await setClock('2026-11-11T03:00:00Z');
-
-    const daniel = await watchNovember(browser, 'daniel');
+    // RULES §9-6, §9-4: 11.11.2026 09:00 ставится формой, как кнопкой (PUT /clock, проход
+    // планировщика, clock.changed), до открытия остальных вкладок; отпуска 09–13 ноября идут,
+    // 23–27 ещё не начался. Вкладка перезагружается сама, метка ставится после перехода в календарь
+    const daniel = await userPage(browser, 'daniel');
+    await setDemoClock(daniel, '2026-11-11');
+    await openNovember(daniel);
     await expect(entries(daniel)).toHaveText([
       'James Walker, Фронт-отдел: 09.11.2026–13.11.2026',
       'James Walker, Фронт-отдел: 23.11.2026–27.11.2026',
