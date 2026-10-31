@@ -87,12 +87,11 @@ describe('поток GET /events', () => {
     expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer tok');
     expect(handlers.onOpen).toHaveBeenCalledTimes(1);
 
-    s.push('event: vacation.cancelled\ndata: {"employeeId":6,"vacationId":2,"by":"HR_RECALL"}\n\n');
+    s.push('event: vacation.cancelled\ndata: {"employeeId":6,"vacationId":2}\n\n');
     await flush();
     expect(handlers.onEvent).toHaveBeenCalledWith('vacation.cancelled', {
       employeeId: 6,
       vacationId: 2,
-      by: 'HR_RECALL',
     });
   });
 

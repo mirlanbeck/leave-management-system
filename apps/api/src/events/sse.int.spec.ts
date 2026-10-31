@@ -342,34 +342,49 @@ describe.each([
         await (await api(login)).get('/calendar?from=2026-10-01&to=2026-11-30')
       ).body.entries.map((e: { vacationId: number }) => e.vacationId);
 
-    // RULES §5-4, §10-2: отмена одобренного сотрудником
-    it('james отменяет одобренный: daniel получает vacation.cancelled, в календаре его нет', async () => {
+    // кадр без способа отмены: точное равенство не пропустит лишнего поля (DECISIONS 2026-10-30 14:24)
+    const cancelled = (employeeId: number, vacationId: number) => ({
+      event: 'vacation.cancelled',
+      data: { type: 'vacation.cancelled', employeeId, vacationId },
+    });
+
+    const watchers = ['james', 'daniel', 'sophie', 'emily', 'olivia'] as const;
+
+    /**
+     * james - владелец, daniel - руководитель, sophie - коллега, emily - HR получают одинаковый
+     * кадр; olivia не получает: следующим у неё приходит одобрение отпуска grace.
+     */
+    const expectCancelledFrames = async (
+      c: Record<(typeof watchers)[number], SseClient>,
+      id: number,
+    ) => {
+      for (const who of ['james', 'daniel', 'sophie', 'emily'] as const) {
+        expect(await c[who].next()).toEqual(cancelled(ids.james, id));
+      }
+      const graceVacation = await approve('grace', 'olivia');
+      expect(await c.olivia.next()).toEqual(approved(ids.grace, graceVacation));
+    };
+
+    // RULES §5-4, §7-2, §10-2: отмена одобренного сотрудником
+    it('james отменяет одобренный: кадр без by у james, daniel, sophie, emily; olivia - нет; в календаре его нет', async () => {
       const id = await vacation('james', 'APPROVED');
-      const c = await connect('daniel');
+      const c = await connectAll([...watchers]);
       expect(await calendar('daniel')).toContain(id);
 
       const res = await (await api('james')).post(`/vacations/${id}/cancel`);
       expect(res.status).toBe(200);
 
-      expect(await c.next()).toEqual({
-        event: 'vacation.cancelled',
-        data: {
-          type: 'vacation.cancelled',
-          employeeId: ids.james,
-          vacationId: id,
-          by: 'EMPLOYEE',
-        },
-      });
+      await expectCancelledFrames(c, id);
       expect(await calendar('daniel')).not.toContain(id);
     });
 
-    // RULES §5-5, §10-2: отзыв HR из идущего отпуска
-    it('HR отзывает james: daniel получает vacation.cancelled HR_RECALL, в календаре его нет', async () => {
+    // RULES §5-5, §7-2, §10-2: отзыв HR из идущего отпуска; коллеги не узнают, что это отзыв
+    it('HR отзывает james: кадр без by у james, daniel, sophie, emily; olivia - нет; в календаре его нет', async () => {
       const id = await vacation('james', 'APPROVED', [
         '2026-10-19',
         '2026-10-23',
       ]);
-      const c = await connect('daniel');
+      const c = await connectAll([...watchers]);
       expect(await calendar('daniel')).toContain(id);
 
       const res = await (
@@ -379,15 +394,7 @@ describe.each([
       });
       expect(res.status).toBe(200);
 
-      expect(await c.next()).toEqual({
-        event: 'vacation.cancelled',
-        data: {
-          type: 'vacation.cancelled',
-          employeeId: ids.james,
-          vacationId: id,
-          by: 'HR_RECALL',
-        },
-      });
+      await expectCancelledFrames(c, id);
       expect(await calendar('daniel')).not.toContain(id);
     });
   });
