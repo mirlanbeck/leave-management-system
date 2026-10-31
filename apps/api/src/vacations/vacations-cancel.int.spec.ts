@@ -487,8 +487,9 @@ describe('отмена и отзыв: POST /vacations/{id}/cancel и /recall (in
       expect(await mails()).toBe(0);
     });
 
-    // RULES §10-2; architecture §9: событие после коммита, с тем, кто отменил
-    it('vacation.cancelled: by EMPLOYEE при отмене, HR_RECALL при отзыве', async () => {
+    // RULES §7-2, §10-2; architecture §9: событие после коммита, только идентификаторы;
+    // отмена и отзыв неразличимы (DECISIONS 2026-10-30 14:24)
+    it('vacation.cancelled при отмене и при отзыве без by', async () => {
       const publish = jest.spyOn(app.get(EventBus), 'publish');
       const a = await vacation('employee1');
       await cancel('employee1', a.id);
@@ -501,7 +502,6 @@ describe('отмена и отзыв: POST /vacations/{id}/cancel и /recall (in
             type: 'vacation.cancelled',
             employeeId: ids.employee1,
             vacationId: a.id,
-            by: 'EMPLOYEE',
           },
         ],
         [
@@ -509,7 +509,6 @@ describe('отмена и отзыв: POST /vacations/{id}/cancel и /recall (in
             type: 'vacation.cancelled',
             employeeId: ids.employee2,
             vacationId: b.id,
-            by: 'HR_RECALL',
           },
         ],
       ]);

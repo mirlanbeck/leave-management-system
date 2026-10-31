@@ -53,7 +53,7 @@ describe('перечитывание по событиям', () => {
   // RULES §10-2: одобрение, отмена или отзыв, утверждение переноса, смена даты выхода
   it.each([
     ['vacation.approved', approved],
-    ['vacation.cancelled', { employeeId: 6, vacationId: 1, by: 'HR_RECALL' }],
+    ['vacation.cancelled', { employeeId: 6, vacationId: 1 }],
     ['vacation.transfer-approved', { employeeId: 6, vacationId: 2, replacedId: 1 }],
     ['employee.hire-date-changed', { employeeId: 6 }],
   ])('%s вызывает onChange', async (type, data) => {
@@ -70,7 +70,7 @@ describe('перечитывание по событиям', () => {
     const { live, onChange } = setup();
     live.onOpen();
     live.onEvent('vacation.approved', approved);
-    live.onEvent('vacation.cancelled', { employeeId: 6, vacationId: 1, by: 'EMPLOYEE' });
+    live.onEvent('vacation.cancelled', { employeeId: 6, vacationId: 1 });
     live.onEvent('employee.hire-date-changed', { employeeId: 6 });
     expect(onChange).not.toHaveBeenCalled();
     await tick();
