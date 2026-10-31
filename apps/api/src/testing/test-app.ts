@@ -3,6 +3,8 @@
 import { INestApplication } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { Test, TestingModuleBuilder } from '@nestjs/testing';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { configureApp } from '../app-setup';
 import { AppModule } from '../app.module';
 import { APP_ENV } from '../config/app-config';
 import { OutboxWorker } from '../mail/outbox-worker';
@@ -41,7 +43,8 @@ export async function createTestApp(
   customize: (b: TestingModuleBuilder) => TestingModuleBuilder = (b) => b,
 ): Promise<INestApplication> {
   const moduleRef = await customize(testModule(extra)).compile();
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication<NestExpressApplication>();
+  configureApp(app);
   await app.init();
   return app;
 }
