@@ -22,19 +22,8 @@ const vacationEvents = (login: string): [string, DomainEvent][] => {
   const employeeId = id(login);
   return [
     ['approved', { type: 'vacation.approved', employeeId, vacationId: 1 }],
-    [
-      'cancelled EMPLOYEE',
-      { type: 'vacation.cancelled', employeeId, vacationId: 1, by: 'EMPLOYEE' },
-    ],
-    [
-      'cancelled HR_RECALL',
-      {
-        type: 'vacation.cancelled',
-        employeeId,
-        vacationId: 1,
-        by: 'HR_RECALL',
-      },
-    ],
+    // отмена и отзыв - одно событие без способа отмены (DECISIONS 2026-10-30 14:24)
+    ['cancelled', { type: 'vacation.cancelled', employeeId, vacationId: 1 }],
     [
       'transfer-approved',
       {

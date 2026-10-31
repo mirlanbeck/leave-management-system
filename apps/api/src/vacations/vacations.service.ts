@@ -335,19 +335,15 @@ export class VacationsService {
    * статус. Писем нет (§8-8).
    */
   cancel(viewer: AuthUser, id: number): Promise<VacationView> {
-    return this.cancelOrRecall(
-      viewer,
-      id,
-      'EMPLOYEE',
-      (row, today, transferPending) =>
-        cancelError({
-          actorId: viewer.id,
-          employeeId: row.employeeId,
-          status: row.status,
-          startDate: fromDbDate(row.startDate),
-          today,
-          transferPending,
-        }),
+    return this.cancelOrRecall(viewer, id, (row, today, transferPending) =>
+      cancelError({
+        actorId: viewer.id,
+        employeeId: row.employeeId,
+        status: row.status,
+        startDate: fromDbDate(row.startDate),
+        today,
+        transferPending,
+      }),
     );
   }
 
@@ -363,7 +359,6 @@ export class VacationsService {
     return this.cancelOrRecall(
       viewer,
       id,
-      'HR_RECALL',
       (row, today, transferPending) =>
         recallError({
           actorIsHr: viewer.isHr,
@@ -387,7 +382,6 @@ export class VacationsService {
   private async cancelOrRecall(
     viewer: AuthUser,
     id: number,
-    by: 'EMPLOYEE' | 'HR_RECALL',
     check: (
       row: ActionRow,
       today: CalendarDate,
@@ -456,13 +450,13 @@ export class VacationsService {
       throw e;
     }
 
-    // RULES §10-2: календарь меняется только при отмене одобренного отпуска (architecture §9)
+    // RULES §10-2: календарь меняется только при отмене одобренного отпуска (architecture §9);
+    // отмена и отзыв в событии неразличимы (RULES §7-2, DECISIONS 2026-10-30 14:24)
     if (result.refunded) {
       this.events.publish({
         type: 'vacation.cancelled',
         employeeId: head.employeeId,
         vacationId: id,
-        by,
       });
     }
     return result.view;

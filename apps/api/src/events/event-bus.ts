@@ -7,12 +7,7 @@ import { Injectable, Logger } from '@nestjs/common';
  */
 export type DomainEvent =
   | { type: 'vacation.approved'; employeeId: number; vacationId: number }
-  | {
-      type: 'vacation.cancelled';
-      employeeId: number;
-      vacationId: number;
-      by: 'EMPLOYEE' | 'HR_RECALL';
-    }
+  | { type: 'vacation.cancelled'; employeeId: number; vacationId: number }
   | {
       type: 'vacation.transfer-approved';
       employeeId: number;
