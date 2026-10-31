@@ -193,6 +193,40 @@ describe('подача заявки: POST /vacations (integration, нужен Po
       expect(await count('Vacation')).toBe(0);
     });
 
+    // RULES §3-5 «Один период — одна заявка»: второй период в той же заявке не принимается
+    // (аудит 3, C-085)
+    it.each([
+      [
+        'поле periods',
+        {
+          periods: [
+            { startDate: '2026-11-02', endDate: '2026-11-06' },
+            { startDate: '2026-11-16', endDate: '2026-11-20' },
+          ],
+        },
+        'periods',
+      ],
+      [
+        'поля startDate2 и endDate2',
+        { startDate2: '2026-11-16', endDate2: '2026-11-20' },
+        'startDate2',
+      ],
+      [
+        'два периода в startDate и endDate',
+        {
+          startDate: ['2026-11-02', '2026-11-16'],
+          endDate: ['2026-11-06', '2026-11-20'],
+        },
+        'startDate',
+      ],
+    ])('второй период: %s -> 400, заявки нет', async (_name, patch, field) => {
+      const res = await post('employee1', valid(patch));
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+      expect(Object.keys(res.body.details.fields)).toContain(field);
+      expect(await count('Vacation')).toBe(0);
+    });
+
     // RULES §3-2: даты обязательны; неверный тип полей
     it.each([
       ['нет startDate', { startDate: undefined }, 'startDate'],

@@ -617,6 +617,30 @@ describe('перенос: POST /vacations/{id}/transfer, блокировки и
       expect(publish).not.toHaveBeenCalled();
     });
 
+    // RULES §5-3 «руководитель и HR чужой перенос не отменяют», в том числе согласующий
+    // (HR - переносы директора, заместитель - переносы HR); аудит 3, C-153
+    it.each([
+      ['manager1', 'employee1'],
+      ['hr', 'employee1'],
+      ['hr', 'director'],
+      ['deputy', 'hr'],
+    ] as const)(
+      '%s отменяет перенос %s - 403 FORBIDDEN, перенос «На согласовании»',
+      async (actor, author) => {
+        const { a, b } = await withPendingTransfer(author);
+        const res = await cancel(actor, b);
+        expect(res.status).toBe(403);
+        expect(res.body).toEqual({
+          statusCode: 403,
+          code: 'FORBIDDEN',
+          message: 'Недостаточно прав для этого действия',
+        });
+        expect(await statusOf(b)).toBe('PENDING');
+        expect(await statusOf(a)).toBe('APPROVED');
+        expect(await ledger()).toHaveLength(1);
+      },
+    );
+
     // RULES §5-3 «сначала отменяется перенос, затем, при необходимости, сам отпуск»
     it('после отмены переноса старый отменяется с полным возвратом', async () => {
       const { a, b } = await withPendingTransfer();
