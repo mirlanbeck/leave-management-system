@@ -22,6 +22,19 @@ describe('countWorkDays', () => {
     expect(countWorkDays(from, to)).toBe(expected);
   });
 
+  // RULES §1-1 «Праздники не учитываются»: 1 января 2027 (пятница) - рабочий день (аудит 3, C-039)
+  it.each([
+    ['2027-01-01', '2027-01-01', 1],
+    ['2026-12-31', '2027-01-01', 2],
+  ])('праздник в будни: %s..%s = %i рабочих дней', (from, to, expected) => {
+    expect(countWorkDays(from, to)).toBe(expected);
+  });
+
+  // RULES §1-1 «Праздники не учитываются»
+  it('праздник в будни - рабочий день', () => {
+    expect(isWorkDay('2027-01-01')).toBe(true);
+  });
+
   // RULES §1-1
   it('отвергает начало позже конца', () => {
     expect(() => countWorkDays('2026-10-02', '2026-10-01')).toThrow(RangeError);
