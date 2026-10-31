@@ -34,8 +34,8 @@ flowchart LR
 
 - Клиент и сервер раздельные сервисы Docker Compose (postgres, mailpit, api, web). Все порты опубликованы только на `127.0.0.1`.
 - Пути API ниже даны **от корня api**. Браузер обращается к ним с префиксом `/api` (nginx срезает его). `GET /health` остаётся в корне api и вне контракта.
-- `proxy_buffering off` и увеличенный `proxy_read_timeout` в nginx заданы заранее под SSE
-- Защитные заголовки ставит nginx на уровне server с always, поэтому они есть на всех ответах :8080, включая /api, SSE и ошибки: Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none', X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy: no-referrer; server_tokens off. В location add_header не ставится: он отменил бы наследование. Api только отключает X-Powered-By (configureApp, общий для main.ts и тестов). В vite dev этих заголовков нет (S9-f; DECISIONS 2026-10-31 10:33).
+- `proxy_buffering off` и увеличенный `proxy_read_timeout` в nginx заданы заранее под SSE.
+- Защитные заголовки ставит nginx на уровне `server` с `always`, поэтому они есть на всех ответах :8080, включая `/api`, SSE и ошибки: `Content-Security-Policy: default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`; `server_tokens off`. В location `add_header` не ставится: он отменил бы наследование. Api только отключает `X-Powered-By` (`configureApp`, общий для `main.ts` и тестов). В `vite dev` этих заголовков нет (S9-f; DECISIONS 2026-10-31 10:33).
 
 ### Источники времени (RULES §1, §9)
 
@@ -1284,7 +1284,7 @@ pass():
 | **NestJS** (Node.js 24) | api | требование PDF; модули и DI соответствуют модульной структуре раздела 4; guards для ролей и `visibleTo`; единый фильтр ошибок под формат `Problem` |
 | **Prisma 7** | доступ к данным, миграции | типизированная схема и генерируемый клиент; что Prisma не выражает (EXCLUDE, частичные UNIQUE, CHECK, триггер) лежит в сыром SQL миграции; дрейф ловит `db:drift` в CI |
 | **PostgreSQL** | хранилище | `EXCLUDE USING gist` по диапазону дат, частичные уникальные индексы, `SELECT ... FOR UPDATE [SKIP LOCKED]`, `DATE` и `timestamptz` — ограничения RULES §10 держит сама БД |
-| **React** (Vite) + nginx | web | требование PDF; SPA, вход токеном, фоновое обновление по SSE; nginx проксирует `/api` без CORS | защитные заголовки и CSP в одном месте.
+| **React** (Vite) + nginx | web | требование PDF; SPA, вход токеном, фоновое обновление по SSE; nginx проксирует `/api` без CORS; защитные заголовки и CSP в одном месте |
 | **Jest** | unit и integration | рядом с NestJS; integration на настоящем Postgres (`*.int.spec.ts`) |
 | **Playwright** | e2e | несколько браузерных контекстов для сценария «две вкладки, разные пользователи» (RULES §7-4) |
 | **Mailpit** | заглушка почты | эмуляция внешнего сервиса (SMTP + HTTP API для проверки писем), без облака |
@@ -1334,7 +1334,7 @@ pass():
 34. Демо-часы: без `DEMO_MODE` маршрут `/clock` закрывает `DemoOnlyMiddleware` раньше guard'ов, флаг читается из `APP_ENV`; `PUT /clock` проверяет дату через `parseApiDate` (годы 2000–2100, как все даты API) до перевода в момент UTC (S9-c, разделы 7, 8; DECISIONS 2026-10-30 14:24; аудит 3, F-4, F-11).
 35. Комментарий заявки, переноса и решения не длиннее 400 единиц UTF-16, как `maxLength` браузера. `@MaxLength` не используется: он считает суррогатную пару за один символ. Длина проверяется до обрезки пробелов. Проверка в DTO (`MaxCommentLength`), поэтому `VALIDATION_FAILED` идёт первым (S9-d, разделы 7, 8; DECISIONS 2026-10-30 14:24, 21:41; аудит 3, F-7).
 36. Событие `vacation.cancelled` не сообщает, отменил ли отпуск сотрудник или его отозвал HR: коллеги по `calendarScope` об отзыве не узнают (S9-e, раздел 9; аудит 3, В-11; DECISIONS 2026-10-30 14:24).
-37. Защитные заголовки ставит только nginx (server, always), без helmet; api свои заголовки не ставит, чтобы они не задвоились на прокси, и только отключает X-Powered-By. CSP без 'unsafe-inline': сборка Vite не кладёт inline-скриптов, стилей и data:-URL (S9-f, раздел 1; DECISIONS 2026-10-31 10:33; аудит 3, F-10).
+37. Защитные заголовки ставит только nginx (`server`, `always`), без helmet; api свои заголовки не ставит, чтобы они не задвоились на прокси, и только отключает `X-Powered-By`. CSP без `'unsafe-inline'`: сборка Vite не кладёт inline-скриптов, стилей и `data:`-URL (S9-f, раздел 1; DECISIONS 2026-10-31 10:33; аудит 3, F-10).
 
 ### Известные ограничения
 
