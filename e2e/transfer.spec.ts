@@ -41,7 +41,7 @@ test.describe('Перенос', () => {
   }) => {
     await approvedJamesVacation(request);
     await loginAs(page, 'james');
-    await openFromNav(page, 'Отпуск');
+    await openFromNav(page, 'Мой отпуск');
     await expect(today(page)).toHaveText('32,5');
 
     // форма в строке: даты пустые, backstopper прежний (DECISIONS 2026-10-28 17:06)
@@ -101,7 +101,7 @@ test.describe('Перенос', () => {
     const a = await approvedJamesVacation(request);
     await transferViaApi(request, 'james', a, { startDate: '2026-11-16', endDate: '2026-11-20' });
     await loginAs(page, 'james');
-    await openFromNav(page, 'Отпуск');
+    await openFromNav(page, 'Мой отпуск');
     await expect(statusOf(page, OLD)).toHaveText('Одобрена · перенос на рассмотрении');
 
     await rowOf(page, NEW).getByRole('button', { name: 'Отменить' }).click();

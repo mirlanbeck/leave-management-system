@@ -146,7 +146,7 @@ test.describe('живое обновление календаря и экран�
 
     // HR: разовое сообщение §6-3 после своей смены даты выхода и открытая форма отзыва у Grace
     const hr = await userPage(browser, 'emily');
-    await openFromNav(hr, 'HR', 'Экран HR');
+    await openFromNav(hr, 'Экран HR');
     await waitLive(hr);
     const liam = hr.getByTestId('hr-balance-row').filter({ hasText: 'Liam Foster' });
     await liam.getByRole('button', { name: 'Изменить дату выхода' }).click();

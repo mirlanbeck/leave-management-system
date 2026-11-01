@@ -1,13 +1,15 @@
 import type { CalendarEntry } from '../api/types';
 import { periodText } from '../approvals/approval-logic';
-import { entryOn, entryText, gridRows, monthDays, type Month } from './calendar-logic';
+import { entryOn, entryText, gridRows, monthDays, type DayCell, type Month } from './calendar-logic';
+
+const dayClass = (d: DayCell) => [d.weekend ? 'weekend' : '', d.today ? 'today' : ''].filter(Boolean).join(' ');
 
 /**
  * Сетка месяца: строки — сотрудники с одобренным отпуском, столбцы — дни, выходные затенены.
  * Отпуск на стыке месяцев закрашен в пределах месяца, полные даты — в подсказке и в списке.
  */
-export function MonthGrid({ month, entries }: { month: Month; entries: CalendarEntry[] }) {
-  const days = monthDays(month);
+export function MonthGrid({ month, entries, today }: { month: Month; entries: CalendarEntry[]; today: string | null }) {
+  const days = monthDays(month, today);
   return (
     <div className="calendar-scroll">
       <table className="calendar-grid" data-testid="calendar-grid">
@@ -15,7 +17,7 @@ export function MonthGrid({ month, entries }: { month: Month; entries: CalendarE
           <tr>
             <th scope="col">Сотрудник</th>
             {days.map((d) => (
-              <th key={d.iso} scope="col" className={d.weekend ? 'weekend' : undefined}>
+              <th key={d.iso} scope="col" className={dayClass(d) || undefined}>
                 {d.day}
                 <br />
                 <small>{d.weekday}</small>
@@ -29,7 +31,7 @@ export function MonthGrid({ month, entries }: { month: Month; entries: CalendarE
               <th scope="row">{row.employee.fullName}</th>
               {days.map((d) => {
                 const e = entryOn(row, d.iso);
-                const cls = [e ? 'on-vacation' : '', d.weekend ? 'weekend' : ''].filter(Boolean).join(' ');
+                const cls = [e ? 'on-vacation' : '', dayClass(d)].filter(Boolean).join(' ');
                 return (
                   <td
                     key={d.iso}

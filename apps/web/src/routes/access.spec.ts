@@ -9,14 +9,14 @@ const hr = { isHr: true, isManager: false };
 
 describe('таблица «роль → маршруты»', () => {
   // RULES §7-2
-  it('сотрудник видит профиль, «Отпуск» и календарь', () => {
+  it('сотрудник видит профиль, «Мой отпуск» и календарь', () => {
     expect(allowedRoutes(employee)).toEqual(['home', 'vacation', 'calendar']);
     expect(canAccess('approvals', employee)).toBe(false);
     expect(canAccess('hr', employee)).toBe(false);
   });
 
   // RULES §7-2
-  it('руководитель видит профиль, «Отпуск», согласование и календарь, но не экран HR', () => {
+  it('руководитель видит профиль, «Мой отпуск», согласование и календарь, но не экран HR', () => {
     expect(allowedRoutes(manager)).toEqual(['home', 'vacation', 'approvals', 'calendar']);
     expect(canAccess('hr', manager)).toBe(false);
   });

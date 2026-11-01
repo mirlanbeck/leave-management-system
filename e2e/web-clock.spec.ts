@@ -10,6 +10,9 @@ test.describe('S3-d: полоса демо-часов', () => {
       await expect(page.getByTestId('clock-value')).toHaveText('21.10.2026 09:00');
       await expect(page.getByTestId('clock-strip')).toContainText('Asia/Bishkek');
       await expect(page.getByTestId('clock-frozen')).toHaveText('остановлены');
+      // DECISIONS 2026-11-01 21:51: подписи полосы
+      await expect(page.getByTestId('clock-strip')).toContainText('Демо-время: 21.10.2026 09:00');
+      await expect(page.getByTestId('clock-strip')).toContainText('(часы остановлены)');
       await page.getByRole('button', { name: 'Выйти' }).click();
       await expect(page).toHaveURL(/\/login$/);
     }
@@ -33,11 +36,11 @@ test.describe('S3-d: полоса демо-часов', () => {
   test('установка часов меняет значение и сохраняется после перезагрузки', async ({ page }) => {
     await loginAs(page, 'daniel');
     await page.getByLabel('Дата', { exact: true }).fill('2026-11-05');
-    await page.getByRole('button', { name: 'Установить' }).click();
+    await page.getByRole('button', { name: 'Установить демо-время' }).click();
     await expect(page.getByTestId('clock-value')).toHaveText('05.11.2026 09:00');
 
     await page.getByLabel('Время', { exact: true }).fill('14:30');
-    await page.getByRole('button', { name: 'Установить' }).click();
+    await page.getByRole('button', { name: 'Установить демо-время' }).click();
     await expect(page.getByTestId('clock-value')).toHaveText('05.11.2026 14:30');
 
     await page.reload();
@@ -48,7 +51,7 @@ test.describe('S3-d: полоса демо-часов', () => {
   test('ошибка установки показывается с кодом и русским сообщением', async ({ page }) => {
     await loginAs(page, 'emily');
     await page.getByLabel('Дата', { exact: true }).fill('');
-    await page.getByRole('button', { name: 'Установить' }).click();
+    await page.getByRole('button', { name: 'Установить демо-время' }).click();
     await expect(page.getByRole('alert')).toContainText('VALIDATION_FAILED');
     await expect(page.getByTestId('clock-value')).toHaveText('21.10.2026 09:00');
   });

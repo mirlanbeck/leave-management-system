@@ -95,7 +95,7 @@ export function MyRequests({ reloadKey, onChanged }: Props) {
         </p>
       )}
       {items && items.length > 0 && (
-        <table className="requests">
+        <table className="requests cards">
           <thead>
             <tr>
               <th>Начало</th>
@@ -108,16 +108,23 @@ export function MyRequests({ reloadKey, onChanged }: Props) {
           <tbody>
             {items.map((v) => (
               <tr key={v.id} data-testid="my-request-row">
-                <td>{formatDate(v.startDate)}</td>
-                <td>{formatDate(v.endDate)}</td>
-                <td>{v.workDays}</td>
-                <td data-testid="my-request-status">{statusWithMarks(v)}</td>
+                <td data-label="Начало">{formatDate(v.startDate)}</td>
+                <td data-label="Окончание">{formatDate(v.endDate)}</td>
+                <td data-label="Рабочие дни">{v.workDays}</td>
+                <td data-label="Статус" data-testid="my-request-status">
+                  <span className={`badge status-${v.status}`}>{statusWithMarks(v)}</span>
+                </td>
                 {withActions && (
-                  <td>
+                  <td className="card-actions">
                     {open?.id !== v.id && (
                       <div className="decision-buttons">
                         {canCancel(v) && (
-                          <button type="button" disabled={busy} onClick={() => setOpen({ id: v.id, kind: 'cancel' })}>
+                          <button
+                            type="button"
+                            className="danger"
+                            disabled={busy}
+                            onClick={() => setOpen({ id: v.id, kind: 'cancel' })}
+                          >
                             Отменить
                           </button>
                         )}
@@ -132,7 +139,7 @@ export function MyRequests({ reloadKey, onChanged }: Props) {
                       <div className="confirm" data-testid="cancel-confirm">
                         <span>{cancelConfirmText(v)}</span>
                         <div className="decision-buttons">
-                          <button type="button" disabled={busy} onClick={() => cancel(v)}>
+                          <button type="button" className="danger" disabled={busy} onClick={() => cancel(v)}>
                             Да, отменить
                           </button>
                           <button type="button" disabled={busy} onClick={() => setOpen(null)}>

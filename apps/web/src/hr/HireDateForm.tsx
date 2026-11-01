@@ -36,6 +36,7 @@ export function HireDateForm({ row, busy, onSubmit, onClose }: Props) {
       <div className="decision-buttons">
         <button
           type="button"
+          className="primary"
           disabled={busy || !canSaveHireDate(hireDate, row.hireDate)}
           onClick={() => onSubmit(hireDate)}
         >

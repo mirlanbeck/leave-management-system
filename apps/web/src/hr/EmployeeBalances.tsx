@@ -77,7 +77,7 @@ export function EmployeeBalances() {
       )}
       {rows === null && error === null && <p className="muted">Загрузка…</p>}
       {rows && rows.length > 0 && (
-        <table className="requests">
+        <table className="requests cards">
           <thead>
             <tr>
               <th>Сотрудник</th>
@@ -91,14 +91,20 @@ export function EmployeeBalances() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.employeeId} data-testid="hr-balance-row">
-                <td>{r.fullName}</td>
-                <td>{orEmpty(r.teamName)}</td>
-                <td>{orEmpty(r.manager?.fullName)}</td>
-                <td data-testid="hr-balance-hire-date">{formatDate(r.hireDate)}</td>
-                <td data-testid="hr-balance-days" className={isNegativeDays(r.balance) ? 'negative' : undefined}>
+                <td className="card-title">{r.fullName}</td>
+                <td data-label="Команда">{orEmpty(r.teamName)}</td>
+                <td data-label="Руководитель">{orEmpty(r.manager?.fullName)}</td>
+                <td data-label="Дата выхода" data-testid="hr-balance-hire-date">
+                  {formatDate(r.hireDate)}
+                </td>
+                <td
+                  data-label="Остаток на сегодня"
+                  data-testid="hr-balance-days"
+                  className={isNegativeDays(r.balance) ? 'negative' : undefined}
+                >
                   {formatDays(r.balance)}
                 </td>
-                <td>
+                <td className="card-actions">
                   {openId !== r.employeeId && (
                     <button type="button" disabled={busy} onClick={() => open(r.employeeId)}>
                       Изменить дату выхода

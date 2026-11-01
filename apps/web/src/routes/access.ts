@@ -13,10 +13,10 @@ export const ROUTE_PATHS: Record<RouteKey, string> = {
 
 export const ROUTE_TITLES: Record<RouteKey, string> = {
   home: 'Профиль',
-  vacation: 'Отпуск',
+  vacation: 'Мой отпуск',
   approvals: 'Согласование',
   calendar: 'Календарь',
-  hr: 'HR',
+  hr: 'Экран HR',
 };
 
 /** Роль → маршруты (RULES §7-2). Руководитель определяется по прямым подчинённым, HR по признаку. */

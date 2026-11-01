@@ -12,7 +12,7 @@ import type { DecisionOutcome } from './approval-logic';
  * у HR заявки директора («Допуск HR», §4-2). Порядок как у сервера, старые сверху.
  * Итог решения — одной строкой над списком, список после решения перечитывается (DECISIONS [S5]).
  */
-export function ApprovalQueue({ title }: { title?: string }) {
+export function ApprovalQueue({ title, hint }: { title?: string; hint?: string }) {
   const [items, setItems] = useState<ApprovalItem[] | null>(null);
   const [error, setError] = useState<ApiProblem | null>(null);
   const [outcome, setOutcome] = useState<DecisionOutcome | null>(null);
@@ -37,6 +37,7 @@ export function ApprovalQueue({ title }: { title?: string }) {
   return (
     <section aria-label={title ?? 'Заявки на согласование'}>
       {title && <h2>{title}</h2>}
+      {hint && <p className="muted section-hint">{hint}</p>}
       {outcome && (
         <p role="status" data-testid="approvals-outcome" className={outcome.tone === 'ok' ? 'notice' : 'error'}>
           {outcome.text}

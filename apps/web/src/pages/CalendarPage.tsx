@@ -93,12 +93,14 @@ export function CalendarPage() {
             title="Мои отпуска"
             month={month}
             entries={splitEntries(shown.entries, profile.id).mine}
+            today={today}
           />
           <CalendarBlock
             testId="calendar-team"
             title={teamCaption(profile)}
             month={month}
             entries={splitEntries(shown.entries, profile.id).team}
+            today={today}
           />
         </>
       )}
@@ -118,14 +120,16 @@ function CalendarBlock({
   title,
   month,
   entries,
+  today,
 }: {
   testId: string;
   title: string;
   month: Month;
   entries: CalendarEntry[];
+  today: string | null;
 }) {
   return (
-    <div data-testid={testId}>
+    <div className="panel" data-testid={testId}>
       <h3>{title}</h3>
       {entries.length === 0 ? (
         <p className="muted" data-testid="calendar-empty">
@@ -133,7 +137,7 @@ function CalendarBlock({
         </p>
       ) : (
         <>
-          <MonthGrid month={month} entries={entries} />
+          <MonthGrid month={month} entries={entries} today={today} />
           <EntryList entries={entries} />
         </>
       )}

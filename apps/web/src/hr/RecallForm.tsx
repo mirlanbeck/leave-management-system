@@ -32,6 +32,7 @@ export function RecallForm({ vacation, busy, onSubmit, onClose }: Props) {
       <div className="decision-buttons">
         <button
           type="button"
+          className="danger"
           disabled={busy || !canSubmitRecall(returnDate, vacation)}
           onClick={() => onSubmit(returnDate)}
         >

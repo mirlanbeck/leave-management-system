@@ -128,7 +128,7 @@ export async function transferViaApi(
 export async function setDemoClock(page: Page, date: string, time = '09:00') {
   await page.getByLabel('Дата', { exact: true }).fill(date);
   await page.getByLabel('Время', { exact: true }).fill(time);
-  await page.getByRole('button', { name: 'Установить' }).click();
+  await page.getByRole('button', { name: 'Установить демо-время' }).click();
   const [y, m, d] = date.split('-');
   await expect(page.getByTestId('clock-value')).toHaveText(`${d}.${m}.${y} ${time}`);
 }

@@ -95,12 +95,12 @@ test.describe('CSP в браузере', () => {
     await page.goto('/login');
     await expect(page.getByTestId('api-status')).toContainText('доступен');
     await loginAs(page, 'james');
-    await openFromNav(page, 'Отпуск');
+    await openFromNav(page, 'Мой отпуск');
     await openFromNav(page, 'Календарь');
     await page.getByRole('button', { name: 'Выйти' }).click();
     await expect(page).toHaveURL(/\/login$/);
     await loginAs(page, 'emily');
-    await openFromNav(page, 'HR', 'Экран HR');
+    await openFromNav(page, 'Экран HR');
     expect(violations).toEqual([]);
   });
 });

@@ -4,7 +4,7 @@ import { MyRequests } from '../vacation/MyRequests';
 
 /**
  * Страница «Согласование» (RULES §4-7; DECISIONS [S5]). У HR два раздела: «Мои заявки»
- * (только чтение; подача на странице «Отпуск») и «Допуск HR» — заявки директора (RULES §4-2).
+ * (только чтение; подача на странице «Мой отпуск») и «Допуск HR» — заявки директора (RULES §4-2).
  */
 export function ApprovalsPage() {
   const { profile } = useAuth();
@@ -14,7 +14,7 @@ export function ApprovalsPage() {
       {profile?.isHr ? (
         <>
           <MyRequests reloadKey={0} />
-          <ApprovalQueue title="Допуск HR" />
+          <ApprovalQueue title="Допуск HR" hint="Заявки директора: их согласует HR" />
         </>
       ) : (
         <ApprovalQueue />
