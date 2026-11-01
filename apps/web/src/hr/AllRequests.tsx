@@ -76,7 +76,7 @@ export function AllRequests() {
         </p>
       )}
       {items && items.length > 0 && (
-        <table className="requests">
+        <table className="requests cards">
           <thead>
             <tr>
               <th>Сотрудник</th>
@@ -91,15 +91,15 @@ export function AllRequests() {
           <tbody>
             {items.map((v) => (
               <tr key={v.id} data-testid="hr-request-row">
-                <td>{v.employee.fullName}</td>
-                <td>{formatDate(v.startDate)}</td>
-                <td>{formatDate(v.endDate)}</td>
-                <td>{v.workDays}</td>
-                <td>
+                <td className="card-title">{v.employee.fullName}</td>
+                <td data-label="Начало">{formatDate(v.startDate)}</td>
+                <td data-label="Окончание">{formatDate(v.endDate)}</td>
+                <td data-label="Рабочие дни">{v.workDays}</td>
+                <td data-label="Статус">
                   <span className={`badge status-${v.status}`}>{statusLabel(v.status)}</span>
                 </td>
-                <td>{marksText(v)}</td>
-                <td>
+                <td data-label="Пометки">{marksText(v)}</td>
+                <td className="card-actions">
                   {canRecall(v) && openId !== v.id && (
                     <button type="button" className="danger" disabled={busy} onClick={() => setOpenId(v.id)}>
                       Отзыв

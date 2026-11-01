@@ -86,14 +86,17 @@ export interface DayCell {
   iso: string;
   weekday: string;
   weekend: boolean;
+  /** День совпадает с «сегодня» сервера (RULES §9-1). */
+  today: boolean;
 }
 
 /** Дни месяца с днём недели; Date.UTC с аргументами - календарная арифметика, не часы браузера. */
-export function monthDays(m: Month): DayCell[] {
+export function monthDays(m: Month, today: string | null = null): DayCell[] {
   const cells: DayCell[] = [];
   for (let day = 1; day <= daysInMonth(m); day += 1) {
     const dow = new Date(Date.UTC(m.year, m.month - 1, day)).getUTCDay();
-    cells.push({ day, iso: isoDate(m, day), weekday: WEEKDAYS[dow], weekend: dow === 0 || dow === 6 });
+    const iso = isoDate(m, day);
+    cells.push({ day, iso, weekday: WEEKDAYS[dow], weekend: dow === 0 || dow === 6, today: iso === today });
   }
   return cells;
 }

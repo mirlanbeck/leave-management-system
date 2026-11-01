@@ -343,6 +343,14 @@ dd {
 .calendar-grid td.on-vacation {
   background: var(--primary);
 }
+/* «Сегодня»: синий номер дня и светлый столбец */
+.calendar-grid th.today {
+  background: var(--primary);
+  color: #fff;
+}
+.calendar-grid td.today:not(.on-vacation) {
+  background: var(--primary-soft);
+}
 .calendar-entries {
   padding-left: 1.25rem;
 }
@@ -396,6 +404,56 @@ dd {
   }
   dd {
     margin-bottom: 0.5rem;
+  }
+  /* Таблицы заявок и остатков карточками: строка — карточка, подпись слева, значение справа */
+  .requests.cards thead {
+    display: none;
+  }
+  .requests.cards,
+  .requests.cards tbody,
+  .requests.cards tr,
+  .requests.cards td {
+    display: block;
+  }
+  .requests.cards tr {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .requests.cards tbody tr:hover {
+    background: none;
+  }
+  .requests.cards td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.25rem 0;
+    border: none;
+    text-align: right;
+  }
+  .requests.cards td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    text-align: left;
+  }
+  .requests.cards td:empty {
+    display: none;
+  }
+  .requests.cards td.card-title,
+  .requests.cards td.card-actions {
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .requests.cards td.card-title::before,
+  .requests.cards td.card-actions::before {
+    content: none;
+  }
+  .requests.cards td.card-title {
+    font-weight: 600;
+  }
+  .requests.cards td.card-actions {
+    padding-top: 0.5rem;
   }
   .calendar-nav h2 {
     min-width: 0;

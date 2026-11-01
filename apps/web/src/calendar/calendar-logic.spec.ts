@@ -61,9 +61,17 @@ describe('месяц календаря', () => {
   it('дни недели и выходные ноября 2026 (1 ноября — воскресенье)', () => {
     const days = monthDays({ year: 2026, month: 11 });
     expect(days).toHaveLength(30);
-    expect(days[0]).toEqual({ day: 1, iso: '2026-11-01', weekday: 'вс', weekend: true });
+    expect(days[0]).toEqual({ day: 1, iso: '2026-11-01', weekday: 'вс', weekend: true, today: false });
     expect(days[1]).toMatchObject({ weekday: 'пн', weekend: false });
     expect(days.filter((d) => d.weekend).map((d) => d.day)).toEqual([1, 7, 8, 14, 15, 21, 22, 28, 29]);
+  });
+
+  // RULES §9-1: «сегодня» берётся с сервера; в сетке отмечен ровно этот день (DECISIONS 2026-11-01 22:09)
+  it('«сегодня» сервера отмечено одним днём месяца, в другом месяце — ни одним', () => {
+    const days = monthDays({ year: 2026, month: 11 }, '2026-11-11');
+    expect(days.filter((d) => d.today).map((d) => d.iso)).toEqual(['2026-11-11']);
+    expect(monthDays({ year: 2026, month: 10 }, '2026-11-11').some((d) => d.today)).toBe(false);
+    expect(monthDays({ year: 2026, month: 11 }).some((d) => d.today)).toBe(false);
   });
 });
 

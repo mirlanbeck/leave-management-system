@@ -95,7 +95,7 @@ export function MyRequests({ reloadKey, onChanged }: Props) {
         </p>
       )}
       {items && items.length > 0 && (
-        <table className="requests">
+        <table className="requests cards">
           <thead>
             <tr>
               <th>Начало</th>
@@ -108,14 +108,14 @@ export function MyRequests({ reloadKey, onChanged }: Props) {
           <tbody>
             {items.map((v) => (
               <tr key={v.id} data-testid="my-request-row">
-                <td>{formatDate(v.startDate)}</td>
-                <td>{formatDate(v.endDate)}</td>
-                <td>{v.workDays}</td>
-                <td data-testid="my-request-status">
+                <td data-label="Начало">{formatDate(v.startDate)}</td>
+                <td data-label="Окончание">{formatDate(v.endDate)}</td>
+                <td data-label="Рабочие дни">{v.workDays}</td>
+                <td data-label="Статус" data-testid="my-request-status">
                   <span className={`badge status-${v.status}`}>{statusWithMarks(v)}</span>
                 </td>
                 {withActions && (
-                  <td>
+                  <td className="card-actions">
                     {open?.id !== v.id && (
                       <div className="decision-buttons">
                         {canCancel(v) && (
