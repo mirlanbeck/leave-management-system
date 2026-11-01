@@ -46,6 +46,7 @@ flowchart LR
 | `OutboxMessage.nextAttemptAt`, `sentAt`, паузы повторов, опрос диспетчера | системное время БД: `now()` для выбора строк, `clock_timestamp()` для `sentAt` и `nextAttemptAt`; `new Date()` в коде нет | диспетчер outbox |
 | «Сегодня» в проверке напоминания перед отправкой (§8-4) | `Clock` + `COMPANY_TZ` | диспетчер outbox |
 | Срок JWT (8 ч) | системные часы | auth |
+| Окно и срок блокировки входа (15 мин, §7-1) | системные часы (`new SystemClock()` в `AuthModule` под токеном `LOGIN_LIMIT_CLOCK`), не `Clock`: перевод демо-часов блокировку не снимает и не продлевает | auth |
 | `User.createdAt` | `now()` БД (технический) | БД |
 | Календарные даты (`startDate`, `endDate`, `hireDate`, `returnDate`) | тип `DATE`, в API строка `YYYY-MM-DD` | везде |
 | Моменты | `timestamptz`, в API ISO-8601 UTC | везде |
@@ -280,7 +281,7 @@ flowchart TD
 | Модуль | Ответственность | Владеет таблицами | Публичный интерфейс | Этап |
 |---|---|---|---|---|
 | **clock** | единственный источник «сейчас»; демо-часы в БД; установка часов | `ClockState` | `await Clock.now()`, `DbClock.set(instant)`, `companyToday(now, tz): YYYY-MM-DD` по `COMPANY_TZ` | S0, S3 |
-| **auth** | вход по логину и паролю, JWT (8 ч, системные часы), guard, признак `accessGranted` | — (читает/пишет `User`) | `login()`, `JwtGuard`, `@Roles()` | S3 |
+| **auth** | вход по логину и паролю, JWT (8 ч, системные часы), guard, признак `accessGranted`, лимит попыток входа (в памяти процесса) | — (читает/пишет `User`) | `login()`, `JwtGuard`, `@Roles()`, `LoginAttempts.begin(login)`, `LoginAttempts.succeed(login)` | S3, S9 |
 | **org** | структура: руководитель, подчинённые, роли, `approverOf`, `visibleTo`, справочник, дата выхода | `User` | `rolesOf(user)`, `approverOf(employee)`, `visibleTo(viewer)`, `calendarScope(viewer)`, `canSee(viewer, employeeId)`, `directory()`, `roster()`, `setHireDate(id, date)` | S3, S6c |
 | **balance** | журнал и баланс: чтение свёртки, запись списания и возврата | `LedgerEntry` | `balanceToday(employee)`, `availableOn(employee, D)`, `debit(tx, vacation)`, `refund(tx, vacation, halfDays)` | S2, S4–S6 |
 | **vacations** | подача, статусы, отмена, отзыв, перенос, списки по видимости | `Vacation` | `submit()`, `cancel()`, `recall()`, `submitTransfer()`, `list(viewer)`, `get(viewer, id)` | S4, S6 |
@@ -413,7 +414,7 @@ calendarScope(viewer) =       (только календарь и его SSE-с�
 
 | Маршрут | Доступ | RULES | Этап |
 |---|---|---|---|
-| `POST /auth/login` | публичный | §7-1, §6-7 | S3 |
+| `POST /auth/login` | публичный | §7-1, §6-7, §9-1 | S3, S9 |
 | `GET /config` | публичный | §9-2 | S3 |
 | `GET /me` | любой | §7-2 | S3 |
 | `GET /clock`, `PUT /clock` | любой вошедший, **только при `DEMO_MODE`**, иначе `404` (в том числе без токена) | §9-2, §9-3 | S3, S9 |
@@ -460,9 +461,12 @@ paths:
       security: []
       summary: Вход по логину и паролю
       description: >
-        Сначала проверяются логин и пароль, затем дата выхода по Clock:
+        Сначала лимит попыток по логину (5 неудач за 15 мин -> блокировка на 15 мин,
+        системные часы; проверка до поиска пользователя и bcrypt, одинаково для
+        несуществующего логина), затем логин и пароль, затем дата выхода по Clock:
         без признака accessGranted и при hireDate позже сегодняшней даты вход запрещён.
-        При успехе ставится accessGranted = true.
+        При успехе ставится accessGranted = true. Успех и 403 сбрасывают счётчик,
+        400 не считается.
       requestBody:
         required: true
         content:
@@ -487,6 +491,13 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }   # VALIDATION_FAILED (пустой логин или пароль)
         "401": { $ref: "#/components/responses/Problem" }   # AUTH_INVALID_CREDENTIALS
         "403": { $ref: "#/components/responses/Problem" }   # AUTH_NOT_HIRED_YET
+        "429":
+          description: AUTH_TOO_MANY_ATTEMPTS, details.retryAfterSeconds
+          headers:
+            Retry-After: { schema: { type: integer }, description: секунды до снятия блокировки }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Problem" }
   /config:
     get:
       tags: [demo-clock]
@@ -1027,7 +1038,7 @@ components:
 ```
 
 - `code` — стабильный идентификатор для интерфейса и тестов; `message` — русский текст для пользователя; `details` — необязательные поля для подстановки.
-- Классы: `400` — форма запроса; `401` — не вошёл; `403` — вошёл, но действие запрещено; `404` — не найдено или не видно; `409` — состояние уже изменилось; `422` — нарушено правило предметной области.
+- Классы: `400` — форма запроса; `401` — не вошёл; `403` — вошёл, но действие запрещено; `404` — не найдено или не видно; `409` — состояние уже изменилось; `422` — нарушено правило предметной области; `429` — вход по логину временно закрыт (только `POST /auth/login`).
 - Необработанные ошибки сервера (`500`) возвращают `{statusCode: 500, message: "Внутренняя ошибка сервера"}` без кода и стека (стек только в серверный лог). Так же, без `code`, отвечают статусы вне каталога (`405`, `413` и т. п.): `{statusCode, message}`.
 - Без `DEMO_MODE` маршрута `/clock` нет: `GET`/`PUT /clock` отвечают `404 NOT_FOUND` всем, в том числе без токена (`DemoOnlyMiddleware` срабатывает раньше guard'ов; S9, DECISIONS 2026-10-30 14:24). Неизвестный маршрут без токена отвечает `404` (до guard), существующий `401`: пересмотрено в S9 и оставлено, см. §13.
 - Лишнее поле в теле запроса отклоняется: `400 VALIDATION_FAILED`, `details.fields` (поле -> сообщения). Битый JSON даёт тот же код.
@@ -1041,6 +1052,7 @@ components:
 | `AUTH_REQUIRED` | 401 | Требуется вход | §7-1 (нет токена, токен недействителен или подделан, пользователь по `sub` не найден; токен только из заголовка `Authorization: Bearer`) |
 | `AUTH_TOKEN_EXPIRED` | 401 | Сессия истекла, войдите снова | §7-1 (текст: DECISIONS 2026-10-22 12:15) |
 | `AUTH_NOT_HIRED_YET` | 403 | Доступ откроется в дату выхода на работу | §6-7, §2 |
+| `AUTH_TOO_MANY_ATTEMPTS` | 429 | Слишком много неудачных попыток входа. Повторите через {n} мин. | §7-1, §9-1 (`{n}` — минуты до снятия блокировки, округление вверх; заголовок `Retry-After` и `details.retryAfterSeconds` в секундах; ответ одинаков для существующего и несуществующего логина) |
 | `FORBIDDEN` | 403 | Недостаточно прав для этого действия | §7-2 |
 | `NOT_FOUND` | 404 | Не найдено | §7-2 (невидимый объект; также `/clock` без `DEMO_MODE`, §9-2) |
 | `VALIDATION_FAILED` | 400 | Некорректные данные запроса | §3-2 (`details.fields`) |
@@ -1104,6 +1116,7 @@ components:
 
 Возвращается **одна, первая по порядку** ошибка (RULES: «система объясняет причину»). Порядок — проектное решение: сначала форма и справочные поля, затем правила дробления, затем зависящие от данных.
 
+- **Вход** (S9-h, DECISIONS 2026-11-01 07:36): `VALIDATION_FAILED` (пайп, до сервиса; в счётчик не попадает) → `AUTH_TOO_MANY_ATTEMPTS` (до поиска пользователя и bcrypt, одинаково для любого логина) → `AUTH_INVALID_CREDENTIALS` (неизвестный логин или неверный пароль, засчитывается) → `AUTH_NOT_HIRED_YET` (пароль верный, счётчик сбрасывается).
 - **Подача:** `VALIDATION_FAILED` → `BACKSTOPPER_REQUIRED` → `BACKSTOPPER_IS_SELF` → `BACKSTOPPER_NOT_FOUND` → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `NO_ACCRUAL_YET` → `VACATION_BEFORE_HIRE` → `PAST_START_YEAR` → `PAST_COMMENT_REQUIRED` → `VACATION_OVERLAP` → `INSUFFICIENT_BALANCE`.
 - **Перенос** (DECISIONS 2026-10-28 17:06): `VALIDATION_FAILED` → `NOT_FOUND` → `FORBIDDEN` (не владелец) → `ALREADY_PROCESSED` (исходный `CANCELLED` или `REPLACED`) → `TRANSFER_SOURCE_NOT_APPROVED` (`PENDING`, `REJECTED`) → `TRANSFER_ALREADY_PENDING` → `TRANSFER_STARTED` → `BACKSTOPPER_REQUIRED` → `BACKSTOPPER_IS_SELF` → `BACKSTOPPER_NOT_FOUND` → `VACATION_DATES_ORDER` → `VACATION_CROSSES_YEAR` → `VACATION_NO_WORK_DAYS` → `TRANSFER_START_IN_PAST` → `TRANSFER_WORKDAYS_MISMATCH` → `VACATION_OVERLAP`. Повторный перенос, пока перенос ждёт решения, — `TRANSFER_ALREADY_PENDING`; отмена и отзыв старого — `PENDING_TRANSFER_BLOCKS`. Проверки `NO_ACCRUAL_YET`, `VACATION_BEFORE_HIRE` (§3-12), `PAST_*` и `INSUFFICIENT_BALANCE` к переносу не применяются (остаток не проверяется, перенос в прошлое запрещён отдельным правилом, §5-2).
 - **Отмена** (DECISIONS 2026-10-28 15:41): `VALIDATION_FAILED` → `NOT_FOUND` → `FORBIDDEN` (не владелец) → `ALREADY_PROCESSED` (статус не `PENDING` и не `APPROVED`) → `PENDING_TRANSFER_BLOCKS` → `CANCEL_STARTED_BY_EMPLOYEE` (`APPROVED`, сегодня ≥ начала) или `CANCEL_PENDING_AFTER_START` (`PENDING`, сегодня ≥ начала).
@@ -1335,10 +1348,13 @@ pass():
 35. Комментарий заявки, переноса и решения не длиннее 400 единиц UTF-16, как `maxLength` браузера. `@MaxLength` не используется: он считает суррогатную пару за один символ. Длина проверяется до обрезки пробелов. Проверка в DTO (`MaxCommentLength`), поэтому `VALIDATION_FAILED` идёт первым (S9-d, разделы 7, 8; DECISIONS 2026-10-30 14:24, 21:41; аудит 3, F-7).
 36. Событие `vacation.cancelled` не сообщает, отменил ли отпуск сотрудник или его отозвал HR: коллеги по `calendarScope` об отзыве не узнают (S9-e, раздел 9; аудит 3, В-11; DECISIONS 2026-10-30 14:24).
 37. Защитные заголовки ставит только nginx (`server`, `always`), без helmet; api свои заголовки не ставит, чтобы они не задвоились на прокси, и только отключает `X-Powered-By`. CSP без `'unsafe-inline'`: сборка Vite не кладёт inline-скриптов, стилей и `data:`-URL (S9-f, раздел 1; DECISIONS 2026-10-31 10:33; аудит 3, F-10).
-38. Инварианты закреплены тестами: в коде api время читает только `SystemClock`, `new SystemClock()` — только в `ClockModule`, `DbClock`, `SseHub` и seed (статический тест по тексту исходников); список маршрутов проверяется точным равенством в режиме с `DEMO_MODE` и без него (`/clock` зарегистрирован всегда, закрывает его `DemoOnlyMiddleware`); сценарии e2e ставят часы только через `PUT /clock`, прямая запись в `ClockState` — только в `e2e:reset` до seed (S9-g, раздел 1; DECISIONS 2026-10-30 14:24, 20:08; аудит 3, F-8, F-12).
+38. Инварианты закреплены тестами: в коде api время читает только `SystemClock`, `new SystemClock()` — только в `ClockModule`, `DbClock`, `SseHub`, `AuthModule` (часы лимита входа, S9-h) и seed (статический тест по тексту исходников); список маршрутов проверяется точным равенством в режиме с `DEMO_MODE` и без него (`/clock` зарегистрирован всегда, закрывает его `DemoOnlyMiddleware`); сценарии e2e ставят часы только через `PUT /clock`, прямая запись в `ClockState` — только в `e2e:reset` до seed (S9-g, раздел 1; DECISIONS 2026-10-30 14:24, 20:08; аудит 3, F-8, F-12).
+
+39. Лимит попыток входа: ключ — SHA-256 логина в том виде, как он пришёл (в том числе несуществующего), IP не учитывается: за nginx у api один адрес на всех, а `X-Forwarded-For` на :3000 подделывается. 5 неудач за 15 мин → `429 AUTH_TOO_MANY_ATTEMPTS` на 15 мин; попытки во время блокировки её не продлевают. `LoginAttempts.begin` одним чтением часов проверяет блокировку и резервирует попытку до bcrypt, без `await` между ними, поэтому параллельные запросы порог не обходят; запрос, упавший с `500`, тоже засчитывается. Успех и `403 AUTH_NOT_HIRED_YET` сбрасывают счётчик, `400` до сервиса не доходит. Счётчик — провайдер в памяти процесса (у каждого `createTestApp` свой), просроченные записи удаляются при каждом вызове. `Retry-After` ставит контроллер (`@Res({ passthrough: true })`), `ProblemFilter` не меняется (S9-h, разделы 1, 7, 8; DECISIONS 2026-11-01 07:36; аудит 3, F-3).
 
 ### Известные ограничения
 
+- Счётчик попыток входа хранится в памяти api: перезапуск снимает все блокировки. Зная логин, можно на 15 минут закрыть вход другому пользователю (S9-h, DECISIONS 2026-11-01 07:36).
 - «Хотя бы один» пользователь без начальника БД не проверяет (seed и тест S3).
 - `replacesId` неизменяем только по соглашению приложения.
 - Дубль письма при сбое между ответом SMTP и пометкой `SENT` (транзакция прохода откатывается, строка остаётся `PENDING`).
