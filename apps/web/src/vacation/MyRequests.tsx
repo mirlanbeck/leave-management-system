@@ -111,13 +111,20 @@ export function MyRequests({ reloadKey, onChanged }: Props) {
                 <td>{formatDate(v.startDate)}</td>
                 <td>{formatDate(v.endDate)}</td>
                 <td>{v.workDays}</td>
-                <td data-testid="my-request-status">{statusWithMarks(v)}</td>
+                <td data-testid="my-request-status">
+                  <span className={`badge status-${v.status}`}>{statusWithMarks(v)}</span>
+                </td>
                 {withActions && (
                   <td>
                     {open?.id !== v.id && (
                       <div className="decision-buttons">
                         {canCancel(v) && (
-                          <button type="button" disabled={busy} onClick={() => setOpen({ id: v.id, kind: 'cancel' })}>
+                          <button
+                            type="button"
+                            className="danger"
+                            disabled={busy}
+                            onClick={() => setOpen({ id: v.id, kind: 'cancel' })}
+                          >
                             Отменить
                           </button>
                         )}
@@ -132,7 +139,7 @@ export function MyRequests({ reloadKey, onChanged }: Props) {
                       <div className="confirm" data-testid="cancel-confirm">
                         <span>{cancelConfirmText(v)}</span>
                         <div className="decision-buttons">
-                          <button type="button" disabled={busy} onClick={() => cancel(v)}>
+                          <button type="button" className="danger" disabled={busy} onClick={() => cancel(v)}>
                             Да, отменить
                           </button>
                           <button type="button" disabled={busy} onClick={() => setOpen(null)}>

@@ -125,7 +125,7 @@ function CalendarBlock({
   entries: CalendarEntry[];
 }) {
   return (
-    <div data-testid={testId}>
+    <div className="panel" data-testid={testId}>
       <h3>{title}</h3>
       {entries.length === 0 ? (
         <p className="muted" data-testid="calendar-empty">

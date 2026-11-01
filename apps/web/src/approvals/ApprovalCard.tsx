@@ -101,12 +101,22 @@ export function ApprovalCard({ item, onReload, onOutcome }: Props) {
           />
           <div className="decision-buttons">
             {buttons.approveVisible && (
-              <button type="button" disabled={!buttons.approveEnabled} onClick={() => decide('approve')}>
+              <button
+                type="button"
+                className="primary"
+                disabled={!buttons.approveEnabled}
+                onClick={() => decide('approve')}
+              >
                 Подтвердить
               </button>
             )}
             {buttons.rejectVisible && (
-              <button type="button" disabled={!buttons.rejectEnabled} onClick={() => decide('reject')}>
+              <button
+                type="button"
+                className="danger"
+                disabled={!buttons.rejectEnabled}
+                onClick={() => decide('reject')}
+              >
                 Отклонить
               </button>
             )}

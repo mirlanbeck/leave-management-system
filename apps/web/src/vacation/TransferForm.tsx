@@ -96,7 +96,7 @@ export function TransferForm({ vacation, onTransferred, onClose }: Props) {
       <span className="muted">{transferHint(vacation.workDays)}</span>
       <div className="decision-buttons">
         {/* двойной клик не даёт второго запроса (RULES §10-1) */}
-        <button type="button" disabled={busy} onClick={() => void send()}>
+        <button type="button" className="primary" disabled={busy} onClick={() => void send()}>
           Отправить перенос
         </button>
         <button type="button" disabled={busy} onClick={onClose}>

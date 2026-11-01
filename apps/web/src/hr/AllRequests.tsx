@@ -95,11 +95,13 @@ export function AllRequests() {
                 <td>{formatDate(v.startDate)}</td>
                 <td>{formatDate(v.endDate)}</td>
                 <td>{v.workDays}</td>
-                <td>{statusLabel(v.status)}</td>
+                <td>
+                  <span className={`badge status-${v.status}`}>{statusLabel(v.status)}</span>
+                </td>
                 <td>{marksText(v)}</td>
                 <td>
                   {canRecall(v) && openId !== v.id && (
-                    <button type="button" disabled={busy} onClick={() => setOpenId(v.id)}>
+                    <button type="button" className="danger" disabled={busy} onClick={() => setOpenId(v.id)}>
                       Отзыв
                     </button>
                   )}
