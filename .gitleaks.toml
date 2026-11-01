@@ -1,0 +1,20 @@
+# Сканирование секретов: ROADMAP S9 (аудит 3, безопасность: секреты); DECISIONS 2026-11-01 18:11.
+# Стандартные правила gitleaks плюс значения по умолчанию docker compose: их стандартные правила не ловят.
+
+[extend]
+useDefault = true
+
+# ${JWT_SECRET:-...}, ${POSTGRES_PASSWORD-...}: в compose допустимы только демо-значения (ROADMAP S9 «Дополнительно»).
+# Порога энтропии нет: любое другое значение по умолчанию у такой переменной — находка.
+[[rules]]
+id = "compose-default-secret"
+description = "Секрет в значении по умолчанию ${VAR:-...}"
+regex = '''\$\{[A-Za-z0-9_]*(?i:secret|password|passwd|token|key)[A-Za-z0-9_]*:?-([^}\s"']+)\}'''
+secretGroup = 1
+keywords = ["secret", "password", "passwd", "token", "key"]
+
+# Только для этого правила и только точным совпадением: демо-значения из docker-compose.yml и .env.example
+# (JWT_SECRET помечен «ТОЛЬКО ДЛЯ ДЕМО», Postgres — «демо-значения»).
+[[rules.allowlists]]
+regexTarget = "secret"
+regexes = ['''^demo-only-not-for-production$''', '''^leave$''']
