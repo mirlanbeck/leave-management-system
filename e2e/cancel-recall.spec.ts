@@ -30,7 +30,7 @@ test.describe('Отмена и отзыв', () => {
     // До начала: сотрудник отменяет сам, дни возвращаются полностью
     await approvedJamesVacation(request);
     await loginAs(page, 'james');
-    await openFromNav(page, 'Отпуск');
+    await openFromNav(page, 'Мой отпуск');
     await expect(today(page)).toHaveText('32,5');
 
     await myRows(page).first().getByRole('button', { name: 'Отменить' }).click();
@@ -48,7 +48,7 @@ test.describe('Отмена и отзыв', () => {
     const hr = await browser.newPage();
     await loginAs(hr, 'emily');
     await setDemoClock(hr, '2026-11-11');
-    await openFromNav(hr, 'HR', 'Экран HR');
+    await openFromNav(hr, 'Экран HR');
 
     // вкладка James перезагружается сама по смене часов в другой вкладке (RULES §10-2)
     await expect(page.getByTestId('clock-value')).toHaveText('11.11.2026 09:00');
@@ -75,7 +75,7 @@ test.describe('Отмена и отзыв', () => {
   test('кнопка «Отзыв» есть только над идущим одобренным отпуском', async ({ page, request }) => {
     await approvedJamesVacation(request);
     await loginAs(page, 'emily');
-    await openFromNav(page, 'HR', 'Экран HR');
+    await openFromNav(page, 'Экран HR');
     await expect(hrRow(page)).toContainText('Одобрена');
     await expect(hrRow(page).getByRole('button', { name: 'Отзыв' })).toHaveCount(0);
 

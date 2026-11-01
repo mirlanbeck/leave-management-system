@@ -35,7 +35,7 @@ test.describe('Дата выхода на работу', () => {
     const mailsBefore = (await waitForSettledInbox(request, 2)).length;
 
     await loginAs(page, 'emily');
-    await openFromNav(page, 'HR', 'Экран HR');
+    await openFromNav(page, 'Экран HR');
     const james = balanceRow(page, 'James Walker');
     await expect(james.getByTestId('hr-balance-hire-date')).toHaveText('15.03.2022');
     await expect(james.getByTestId('hr-balance-days')).toHaveText('32,5');
@@ -54,7 +54,7 @@ test.describe('Дата выхода на работу', () => {
     // сотрудник видит минус; одобренный отпуск не отменён (RULES §6-3, §6-4)
     const employee = await browser.newPage();
     await loginAs(employee, 'james');
-    await openFromNav(employee, 'Отпуск');
+    await openFromNav(employee, 'Мой отпуск');
     await expect(employee.getByTestId('balance-today')).toHaveText('−3');
     await expect(employee.getByTestId('balance-today')).toHaveClass(/negative/);
     await expect(employee.getByTestId('my-request-row').first()).toContainText('Одобрена');
@@ -64,7 +64,7 @@ test.describe('Дата выхода на работу', () => {
     await expect(james.getByTestId('hr-balance-days')).toHaveText('−5');
     const again = await browser.newPage();
     await loginAs(again, 'james');
-    await openFromNav(again, 'Отпуск');
+    await openFromNav(again, 'Мой отпуск');
     await expect(again.getByTestId('balance-today')).toHaveText('−5');
 
     // писем о смене даты нет (RULES §6-3, §8-1)
@@ -77,7 +77,7 @@ test.describe('Дата выхода на работу', () => {
   // RULES §6-1, §2-3: в любую сторону — сдвиг раньше даёт первое начисление
   test('сдвиг даты выхода раньше даёт начисление', async ({ page }) => {
     await loginAs(page, 'emily');
-    await openFromNav(page, 'HR', 'Экран HR');
+    await openFromNav(page, 'Экран HR');
     const liam = balanceRow(page, 'Liam Foster');
     await expect(liam.getByTestId('hr-balance-days')).toHaveText('0');
 

@@ -4,7 +4,7 @@ import { loginAs, openFromNav, waitForSettledInbox } from './helpers';
 
 // Страница «Отпуск»: остаток, подача заявки, «Мои заявки» (S4-c, issue #39).
 // e2e:reset ставит часы на 2026-10-21 09:00 по Бишкеку; ожидаемые числа сверены с API.
-const openVacation = (page: Page) => openFromNav(page, 'Отпуск');
+const openVacation = (page: Page) => openFromNav(page, 'Мой отпуск');
 
 async function fillRequest(page: Page, start: string, end: string, backstopper: string) {
   await page.getByLabel('Начало').fill(start);
@@ -65,7 +65,7 @@ test.describe('S4-c: страница «Отпуск»', () => {
 
     // после «Установить» страница перезагружается (DECISIONS 2026-10-26 15:58)
     await page.getByLabel('Дата', { exact: true }).fill('2026-11-01');
-    await page.getByRole('button', { name: 'Установить' }).click();
+    await page.getByRole('button', { name: 'Установить демо-время' }).click();
     await expect(page.getByTestId('clock-value')).toHaveText('01.11.2026 09:00');
     await expect(page.getByTestId('balance-today')).toHaveText('1,5');
 

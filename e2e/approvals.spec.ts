@@ -8,6 +8,7 @@ const openApprovals = (page: Page) => openFromNav(page, 'Согласовани�
 const cards = (page: Page) => page.getByTestId('approval-card');
 const cardOf = (page: Page, fullName: string) => cards(page).filter({ hasText: fullName });
 const outcome = (page: Page) => page.getByTestId('approvals-outcome');
+const DIRECTOR_HINT = 'Заявки директора: их согласует HR';
 
 function countPosts(page: Page, action: 'approve' | 'reject') {
   const seen = { count: 0 };
@@ -29,7 +30,7 @@ test.describe('Руководитель получает уведомление 
     request,
   }) => {
     await loginAs(page, 'james');
-    await openFromNav(page, 'Отпуск');
+    await openFromNav(page, 'Мой отпуск');
     await page.getByLabel('Начало').fill('2026-11-02');
     await page.getByLabel('Окончание').fill('2026-11-06');
     await page.getByLabel('Заменяющий (backstopper)').selectOption({ label: 'Sophie Bennett' });
@@ -81,6 +82,8 @@ test.describe('Если в команде уже есть согласованн
 
     await loginAs(page, 'daniel');
     await openApprovals(page);
+    // пояснение о заявках директора только у HR (RULES §4-2)
+    await expect(page.getByText(DIRECTOR_HINT)).toHaveCount(0);
 
     await expect(cards(page)).toHaveCount(1);
     const card = cardOf(page, 'Sophie Bennett');
@@ -157,6 +160,8 @@ test.describe('S5-d: экран «Согласование»', () => {
 
     const clearance = page.getByRole('region', { name: 'Допуск HR' });
     await expect(clearance.getByRole('heading', { name: 'Допуск HR', level: 2 })).toBeVisible();
+    // DECISIONS 2026-11-01 21:51: название «Допуск HR» прежнее, под ним пояснение
+    await expect(clearance.getByText(DIRECTOR_HINT)).toBeVisible();
     await expect(clearance.getByTestId('approval-card')).toHaveCount(1);
     const card = cardOf(page, 'Margaret Collins');
     await expect(card.getByTestId('approval-period')).toHaveText('02.11.2026–06.11.2026');
@@ -212,7 +217,7 @@ test.describe('S5-d: экран «Согласование»', () => {
 
     await logout(page);
     await signIn(page, 'james');
-    await openFromNav(page, 'Отпуск');
+    await openFromNav(page, 'Мой отпуск');
     await expect(page.getByTestId('my-request-row').first()).toHaveText(/21\.12\.2026\s*31\.12\.2026\s*9\s*Отклонена/);
   });
 });

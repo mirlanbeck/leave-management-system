@@ -21,7 +21,7 @@ test.describe('демо-часы в двух вкладках', () => {
       await loginAs(daniel, 'daniel');
       const james = await jamesContext.newPage();
       await loginAs(james, 'james');
-      await openFromNav(james, 'Отпуск');
+      await openFromNav(james, 'Мой отпуск');
       await expect(james.getByTestId('clock-value')).toHaveText('21.10.2026 09:00');
       await expect(james.getByTestId('balance-today')).toHaveText('37,5');
       await waitLive(james);
