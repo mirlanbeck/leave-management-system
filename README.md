@@ -116,7 +116,7 @@ Full-stack employee leave management system with leave balance tracking, approva
 | S6 Отмена, перенос, дата выхода            | готов                                                              |
 | S7 Напоминания                             | готов                                                              |
 | S8 Обновление без перезагрузки (SSE)       | готов                                                              |
-| S9 Финальный аудит                         | задачи готовы: аудит 3 проведён, S9-a…S9-k (эпик #86), лимит попыток входа (S9-h, #102), multer и `npm audit` в CI (S9-i, #104), сканирование секретов gitleaks в CI и `npm run scan:secrets` (S9-j, #106), `fresh-clone` по командам README (S9-k, #108); отдельно решается `TZ=America/New_York` |
+| S9 Финальный аудит                         | готов: аудит 3 проведён, S9-a…S9-k (эпик #86), лимит попыток входа (S9-h, #102), multer и `npm audit` в CI (S9-i, #104), сканирование секретов gitleaks в CI и `npm run scan:secrets` (S9-j, #106), `fresh-clone` по командам README (S9-k, #108); `TZ=America/New_York` — только unit и integration в CI (DECISIONS 2026-11-01 21:15) |
 | S10 README и экспорт сессий                | не начат                                                           |
 
 ### Работает
@@ -189,6 +189,7 @@ S9-k (#108): чистый клон с GitHub (Windows, `core.autocrlf=true`) п�
 - Job `fresh-clone` проверяет демо-сценарий README через API на Linux: вход формой, полоса часов, «Календарь» и Windows проверены вручную один раз (S9-k).
 - Второй клон без `COMPOSE_PROJECT_NAME` попадает в тот же проект compose и на тот же том, два стека одновременно не поднимаются: порты фиксированы (S9-k).
 - В Windows PowerShell с политикой выполнения по умолчанию `npm run …` не запускается, нужен `npm.cmd` (S9-k).
+- e2e и стек compose в часовом поясе, отличном от UTC, не прогонялись; unit и integration идут в CI в двух поясах (по умолчанию и `America/New_York`) (S9).
 - Вёрстку на узком экране (телефон) не проверяли.
 - Режим без демо-часов (`DEMO_MODE` выключен) проверен unit- и integration-тестами, в e2e не проверяется: стек compose запускается в демо-режиме.
 
