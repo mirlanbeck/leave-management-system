@@ -12,7 +12,7 @@ Full-stack employee leave management system with leave balance tracking, approva
 
 ## Требования к окружению
 
-Указаны только значения, измеренные на машине разработки 2026-10-23. Минимальные версии Docker и Compose, другие ОС и объём RAM для сборки образов не проверялись.
+Указаны только значения, измеренные на машине разработки (2026-10-23; образы, память и сборка — 2026-11-01). Минимальные версии Docker и Compose, другие ОС и объём RAM для сборки образов не проверялись.
 
 **Проверено на:** Windows 11 Pro 10.0.26200 (64-bit), Docker Desktop (движок на WSL2, `6.18.33.2-microsoft-standard-WSL2`), 31,5 ГБ RAM, виртуальная машина Docker видит 24 CPU и 15,4 ГиБ.
 
@@ -21,16 +21,21 @@ Full-stack employee leave management system with leave balance tracking, approva
 | Docker Engine                   | 29.8.2 (`docker version`, client и server)                                                                       |
 | Docker Compose                  | v5.5.1 (`docker compose version`), Compose v2+ синтаксис                                                         |
 | Node.js (для тестов вне Docker) | 24.21.0, npm 11.6.2                                                                                              |
-| Образы проекта                  | api 872 МБ, web 280 МБ; postgres 625 МБ, mailpit 60 МБ (`docker images`)                                         |
-| Память в простое после старта   | api 91,6 МиБ, postgres 36,3 МиБ, web 20,8 МиБ, mailpit 8,9 МиБ, всего около 158 МиБ (`docker stats --no-stream`) |
+| Образы проекта                  | api 907 МБ, web 280 МБ; postgres 625 МБ, mailpit 60 МБ (`docker images`)                                         |
+| Память в простое после старта   | api 105,8 МиБ, postgres 44 МиБ, web 22,4 МиБ, mailpit 10,3 МиБ, всего около 182 МиБ (`docker stats --no-stream`) |
+| Первая сборка и запуск          | `docker compose build --no-cache` 134 с (базовые образы уже скачаны), `docker compose up -d --wait` 18 с         |
 
 **Порты (только 127.0.0.1):** web 8080, api 3000, Postgres 5432, Mailpit 8025 (интерфейс) и 1025 (SMTP). Порты должны быть свободны.
+
+**Второй клон репозитория:** имя проекта задано в `docker-compose.yml` (`name: leave-management`), поэтому клон из другой папки попадёт в тот же проект и на тот же том `leave-management_pgdata`, а порты будут заняты. Чтобы поднять его отдельно, остановите первый стек (`docker compose stop`) и задайте другое имя проекта в той же консоли, например `$env:COMPOSE_PROJECT_NAME='leave-copy'` (PowerShell) или `export COMPOSE_PROJECT_NAME=leave-copy` (bash); с ним работают и `npm run seed:demo`, и `e2e:reset`.
+
+**Windows PowerShell:** при политике выполнения по умолчанию `npm` не запускается (ошибка «running scripts is disabled», блокируется `npm.ps1`). Вызывайте `npm.cmd` вместо `npm` (например, `npm.cmd run seed:demo`) или запускайте команды из cmd или Git Bash. Для `seed:demo` есть вариант без npm: `docker compose exec api node dist/seed-demo.js`.
 
 **Запуск:** `docker compose up` из корня репозитория (`cp .env.example .env` не нужен, демо-значения заданы в `docker-compose.yml`). Страница: http://localhost:8080, проверка API: http://localhost:3000/health, почта: http://localhost:8025. Данные Postgres лежат в именованном томе `pgdata`; полный сброс: `docker compose down -v`.
 
 **Почта:** письма отправляет диспетчер outbox в api через SMTP в Mailpit (интерфейс http://localhost:8025). Время попыток идёт по системным часам, а не по демо-часам: при недоступном Mailpit письмо уходит после его восстановления, даже если демо-часы остановлены. Лимита попыток нет, пауза между повторами удваивается до 5 минут. Переменные (значения по умолчанию заданы в `docker-compose.yml`, справка в `.env.example`): `SMTP_HOST`, `SMTP_PORT`, `MAIL_FROM`, `OUTBOX_POLL_MS` (интервал опроса, 2000 мс), `OUTBOX_RETRY_BASE_MS` (первая пауза, 5000 мс), `OUTBOX_RETRY_MAX_MS` (наибольшая пауза, 300000 мс). Известное ограничение: если api упадёт после того, как SMTP принял письмо, но до пометки «отправлено», письмо уйдёт повторно (дубль).
 
-**Проверка запуска:** `npm run smoke:compose` (поднимает стек, проверяет healthcheck, порты, /health, перезапуск api, повторный `up`, том Postgres).
+**Проверка запуска:** `npm run smoke:compose` (поднимает стек, проверяет healthcheck, порты, /health, перезапуск api, повторный `up`, том Postgres). По ходу скрипт останавливает Postgres и перезапускает api, а в конце останавливает стек (`docker compose down`, данные в томе остаются); не запускайте его во время ручной проверки сценария. Оставить стек запущенным: `npm run smoke:compose -- --keep`.
 
 **Integration-тесты вне Docker:** сначала поднимите Postgres: `docker compose up -d postgres`. Затем `npm run test:int`. Тесты идут на **отдельной БД `leave_test`** (создаётся скриптом при отсутствии, в том числе на существующем томе), рабочая БД `leave` с данными запущенного стека не затрагивается. Другая БД: переменная `TEST_DATABASE_URL`, имя БД обязано оканчиваться на `_test` (иначе скрипт и очистка тестов откажутся работать). Выборочный запуск: сначала части путей, затем флаги jest, например `npm run test:int -- approvals vacations -t "имя теста"`; аргументы до первого флага идут в `--testPathPatterns`, флаги передаются в jest без изменений. Unit-тесты (`npm test`) БД не требуют.
 
@@ -111,7 +116,7 @@ Full-stack employee leave management system with leave balance tracking, approva
 | S6 Отмена, перенос, дата выхода            | готов                                                              |
 | S7 Напоминания                             | готов                                                              |
 | S8 Обновление без перезагрузки (SSE)       | готов                                                              |
-| S9 Финальный аудит                         | задачи готовы: аудит 3 проведён, S9-a…S9-j (эпик #86), лимит попыток входа (S9-h, #102), multer и `npm audit` в CI (S9-i, #104), сканирование секретов gitleaks в CI и `npm run scan:secrets` (S9-j, #106); отдельно решаются `fresh-clone` и `TZ=America/New_York` |
+| S9 Финальный аудит                         | задачи готовы: аудит 3 проведён, S9-a…S9-k (эпик #86), лимит попыток входа (S9-h, #102), multer и `npm audit` в CI (S9-i, #104), сканирование секретов gitleaks в CI и `npm run scan:secrets` (S9-j, #106), `fresh-clone` по командам README (S9-k, #108); отдельно решается `TZ=America/New_York` |
 | S10 README и экспорт сессий                | не начат                                                           |
 
 ### Работает
@@ -162,6 +167,8 @@ S9-g (#93): тесты под строки «нет теста» аудита 3 
 
 S9-i (#104): уязвимость multer (GHSA-q7qp-rjg7-q26m, high) закрыта: @nestjs/platform-express 11 закрепляет multer 2.4.0, поэтому версия 2.5.0 задана через `overrides` в корневом package.json. В CI добавлен job `audit` (`npm audit --audit-level=high` по всем зависимостям). Поведение api не менялось: multipart по-прежнему не разбирается (400). Проверено полными unit, integration и e2e на пересобранном образе.
 
+S9-k (#108): чистый клон с GitHub (Windows, `core.autocrlf=true`) поднимается командами README, все файлы с LF; демо-сценарий README пройден вручную целиком (вход, демо-часы, `seed:demo`, «Согласование», Mailpit, «Календарь», две вкладки). Job `fresh-clone` в CI без `npm ci` проверяет Mailpit, демо-часы, `npm run seed:demo`, 10 писем и очереди «Согласование» с датами README (`scripts/check-readme-demo.mjs`).
+
 ### Не работает
 
 - HR меняет свою дату выхода без отдельного контроля; после сдвига даты выхода согласование не проверяет «начало не раньше даты выхода» (DECISIONS 2026-10-28 19:19).
@@ -179,6 +186,9 @@ S9-i (#104): уязвимость multer (GHSA-q7qp-rjg7-q26m, high) закры�
 - multer 2.5.0 задан через `overrides`, пока @nestjs/platform-express 11 требует 2.4.0; в npm 11.6.2 `npm ls multer` из-за этого завершается ошибкой `invalid`, в npm 11.19 — нет (S9-i).
 - `npm audit` показывает 34 уязвимости low/moderate в dev-зависимостях (jest, eslint, @nestjs/cli); они исправляются только мажорными обновлениями, шаг CI их не ловит (`--audit-level=high`) (S9-i).
 - Проверка секретов (gitleaks) не сканирует коммиты слияния и не ловит пароли без высокой энтропии вне значений по умолчанию compose; личные данные (email, пути) в экспортах сессий она не ищет (S9-j, #106).
+- Job `fresh-clone` проверяет демо-сценарий README через API на Linux: вход формой, полоса часов, «Календарь» и Windows проверены вручную один раз (S9-k).
+- Второй клон без `COMPOSE_PROJECT_NAME` попадает в тот же проект compose и на тот же том, два стека одновременно не поднимаются: порты фиксированы (S9-k).
+- В Windows PowerShell с политикой выполнения по умолчанию `npm run …` не запускается, нужен `npm.cmd` (S9-k).
 - Вёрстку на узком экране (телефон) не проверяли.
 - Режим без демо-часов (`DEMO_MODE` выключен) проверен unit- и integration-тестами, в e2e не проверяется: стек compose запускается в демо-режиме.
 
