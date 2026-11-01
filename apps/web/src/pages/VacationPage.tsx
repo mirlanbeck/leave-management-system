@@ -5,7 +5,7 @@ import { MyRequests } from '../vacation/MyRequests';
 import type { VacationFormValues } from '../vacation/submit-logic';
 import { EMPTY_FORM, VacationForm } from '../vacation/VacationForm';
 
-/** Страница «Отпуск»: остаток, форма заявки и «Мои заявки» (RULES §3; DECISIONS 2026-10-26 00:43). */
+/** Страница «Мой отпуск»: остаток, форма заявки и «Мои заявки» (RULES §3; DECISIONS 2026-10-26 00:43). */
 export function VacationPage() {
   const [form, setForm] = useState<VacationFormValues>(EMPTY_FORM);
   const [on, setOn] = useState('');
@@ -27,7 +27,7 @@ export function VacationPage() {
 
   return (
     <section>
-      <h1>Отпуск</h1>
+      <h1>Мой отпуск</h1>
       <BalancePanel on={on} onChangeOn={setOn} reloadKey={reloadKey} />
       <VacationForm values={form} onChange={changeForm} onSubmitted={submitted} />
       <MyRequests reloadKey={reloadKey} onChanged={changed} />

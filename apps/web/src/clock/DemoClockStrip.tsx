@@ -62,14 +62,14 @@ function ClockForm(props: { companyTz: string; now: string }) {
   return (
     <div className="clock-strip" data-testid="clock-strip">
       <span>
-        Дата/время: <strong data-testid="clock-value">{formatCompanyMoment(now, companyTz)}</strong> ({companyTz}),{' '}
-        <span data-testid="clock-frozen">остановлены</span>
+        Демо-время: <strong data-testid="clock-value">{formatCompanyMoment(now, companyTz)}</strong> ({companyTz}) (часы{' '}
+        <span data-testid="clock-frozen">остановлены</span>)
       </span>
       <form onSubmit={onSubmit}>
         <input type="date" aria-label="Дата" value={date} onChange={(e) => setDate(e.target.value)} />
         <input type="time" aria-label="Время" value={time} onChange={(e) => setTime(e.target.value)} />
         <button type="submit" disabled={busy}>
-          Установить
+          Установить демо-время
         </button>
       </form>
       {error && <ErrorBox problem={error} />}
