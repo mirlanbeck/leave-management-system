@@ -15,6 +15,37 @@ import { CommonModule } from './common.module';
 
 const EXPECTED_PUBLIC = ['GET /config', 'GET /health', 'POST /auth/login'];
 
+/**
+ * Все маршруты api (аудит 3, F-12). Точный список: новый маршрут - осознанная правка этого
+ * списка. /clock зарегистрирован и без DEMO_MODE, закрывает его DemoOnlyMiddleware.
+ */
+const EXPECTED_ROUTES = [
+  'GET /approvals',
+  'GET /calendar',
+  'GET /clock',
+  'GET /config',
+  'GET /employees',
+  'GET /events',
+  'GET /health',
+  'GET /hr/balances',
+  'GET /me',
+  'GET /me/balance',
+  'GET /vacations',
+  'GET /vacations/:id',
+  'PATCH /employees/:id/hire-date',
+  'POST /auth/login',
+  'POST /vacations',
+  'POST /vacations/:id/approve',
+  'POST /vacations/:id/cancel',
+  'POST /vacations/:id/recall',
+  'POST /vacations/:id/reject',
+  'POST /vacations/:id/transfer',
+  'PUT /clock',
+].sort();
+
+const routeLabels = (app: INestApplication) =>
+  listRoutes(app).map(label).sort();
+
 /** Закрытые маршруты, которые без токена ответили не 401 AUTH_REQUIRED. */
 const openRoutes = (probes: ProbedRoute[]) =>
   probes.filter(
@@ -36,26 +67,38 @@ describe('все маршруты закрыты (RULES §7-1)', () => {
 
   afterAll(() => app.close());
 
-  // RULES §7-1
-  it('краулер находит маршруты S3, S4 и S6-c', () => {
-    const found = listRoutes(app).map(label);
-    expect(found).toEqual(
-      expect.arrayContaining([
-        'POST /auth/login',
-        'GET /config',
-        'GET /health',
-        'GET /me',
-        'GET /clock',
-        'PUT /clock',
-        'GET /employees',
-        'GET /me/balance',
-        'GET /vacations',
-        'POST /vacations',
-        'GET /vacations/:id',
-        'GET /hr/balances',
-        'PATCH /employees/:id/hire-date',
-      ]),
-    );
+  // RULES §7-1, §5-8, §7-3: краулер находит ровно эти маршруты, других нет
+  it('краулер находит ровно маршруты api', () => {
+    expect(routeLabels(app)).toEqual(EXPECTED_ROUTES);
+  });
+
+  // RULES §5-8 «Прямого изменения дат у HR нет»: отпуск меняют только подача, решение,
+  // отмена, отзыв и перенос (новая заявка)
+  it('маршрута правки дат отпуска нет', () => {
+    expect(
+      routeLabels(app).filter((r) =>
+        /^(POST|PUT|PATCH|DELETE) \/vacations/.test(r),
+      ),
+    ).toEqual([
+      'POST /vacations',
+      'POST /vacations/:id/approve',
+      'POST /vacations/:id/cancel',
+      'POST /vacations/:id/recall',
+      'POST /vacations/:id/reject',
+      'POST /vacations/:id/transfer',
+    ]);
+  });
+
+  // RULES §7-3 «управления составом из интерфейса нет»: у сотрудника меняется только дата выхода
+  it('маршрута смены руководителя и состава команды нет', () => {
+    expect(
+      routeLabels(app).filter((r) => / \/(employees|me)(\/|$)/.test(r)),
+    ).toEqual([
+      'GET /employees',
+      'GET /me',
+      'GET /me/balance',
+      'PATCH /employees/:id/hire-date',
+    ]);
   });
 
   // RULES §7-1
@@ -87,6 +130,12 @@ describe('без DEMO_MODE маршрута /clock нет (RULES §9-2)', () => 
   });
 
   afterAll(() => off.close());
+
+  // RULES §9-2: контроллер зарегистрирован, маршрут закрывает DemoOnlyMiddleware
+  // (DECISIONS 2026-10-30 20:08), поэтому список тот же, что с DEMO_MODE
+  it('краулер находит те же маршруты, что с DEMO_MODE', () => {
+    expect(routeLabels(off)).toEqual(EXPECTED_ROUTES);
+  });
 
   const answer = async (method: 'get' | 'put', path: string, auth?: string) => {
     let req = request(off.getHttpServer() as App)[method](path);
