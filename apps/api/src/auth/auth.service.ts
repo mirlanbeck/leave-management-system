@@ -6,6 +6,7 @@ import { ApiError, MESSAGES } from '../common/problem';
 import { APP_ENV } from '../config/app-config';
 import { fromDbDate } from '../domain/calendar-date';
 import { PrismaService } from '../prisma/prisma.service';
+import { LoginAttempts } from './login-attempts';
 import { dummyPasswordHash, verifyPassword } from './password';
 
 export interface LoginResult {
@@ -20,6 +21,7 @@ export class AuthService implements OnModuleInit {
     private readonly jwt: JwtService,
     private readonly clock: Clock,
     @Inject(APP_ENV) private readonly env: NodeJS.ProcessEnv,
+    private readonly attempts: LoginAttempts,
   ) {}
 
   /** Фиктивный хеш считается при старте, чтобы и первый вход не выдавал себя по времени (RULES §7-1). */
@@ -27,8 +29,10 @@ export class AuthService implements OnModuleInit {
     await dummyPasswordHash();
   }
 
-  /** Сначала логин и пароль, потом дата выхода по Clock (RULES §7-1, §6-7). */
+  /** Сначала лимит попыток, потом логин и пароль, потом дата выхода по Clock (RULES §7-1, §6-7). */
   async login(login: string, password: string): Promise<LoginResult> {
+    // до поиска пользователя и bcrypt: при блокировке путь одинаков для любого логина (RULES §7-1)
+    await this.attempts.begin(login);
     const user = await this.prisma.user.findUnique({ where: { login } });
     // неизвестный логин и неверный пароль неразличимы и по ответу, и по времени:
     // bcrypt вызывается всегда, без пользователя вход не проходит (RULES §7-1)
@@ -43,6 +47,8 @@ export class AuthService implements OnModuleInit {
         MESSAGES.AUTH_INVALID_CREDENTIALS,
       );
     }
+    // пароль верный: счётчик сбрасывается и при 403 «до даты выхода»
+    this.attempts.succeed(login);
 
     if (!user.accessGranted) {
       const today = companyToday(await this.clock.now(), companyTz(this.env));

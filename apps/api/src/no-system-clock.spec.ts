@@ -31,9 +31,10 @@ describe('время только через Clock', () => {
   });
 
   // RULES §1-5, §9-1: SystemClock в обход Clock - только там, где время системное по правилу
-  it('new SystemClock() создают только ClockModule, DbClock, SseHub и seed', () => {
+  it('new SystemClock() создают только ClockModule, DbClock, SseHub, AuthModule и seed', () => {
     expect(
       offenders(/new SystemClock\(/, {
+        'auth/auth.module.ts': 1, // окно лимита входа, DECISIONS 2026-11-01 07:36
         'clock/clock.module.ts': 1, // без DEMO_MODE
         'clock/db-clock.ts': 1, // начальное значение часов, RULES §9-2
         'events/sse-hub.ts': 1, // закрытие потока по exp, DECISIONS 2026-10-30 00:57

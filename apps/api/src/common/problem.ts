@@ -14,6 +14,7 @@ export type ProblemCode =
   | 'AUTH_REQUIRED'
   | 'AUTH_TOKEN_EXPIRED'
   | 'AUTH_NOT_HIRED_YET'
+  | 'AUTH_TOO_MANY_ATTEMPTS'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'VALIDATION_FAILED';
