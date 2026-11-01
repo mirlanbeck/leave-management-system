@@ -9,8 +9,10 @@ import {
   passwordHash,
   setDbClock,
 } from '../testing/int-helpers';
+import { FakeClock } from '../clock/clock';
 import { createTestApp } from '../testing/test-app';
 import { createPool, insertUser, truncateAll } from '../testing/test-db';
+import { LOGIN_LIMIT_CLOCK } from './login-attempts';
 
 // 2026-10-24 09:00 в Бишкеке (UTC+6)
 const NOW = '2026-10-24T03:00:00Z';
@@ -157,6 +159,44 @@ describe('лимит попыток входа (integration, нужен Postgres
     const statuses = res.map((r) => r.status).sort();
     expect(statuses.filter((s) => s === 401)).toHaveLength(LIMIT);
     expect(statuses.filter((s) => s === 429)).toHaveLength(10 - LIMIT);
+  });
+
+  describe('часы лимита подменены (FakeClock вместо системных)', () => {
+    let limitClock: FakeClock;
+
+    beforeEach(async () => {
+      await app.close();
+      limitClock = new FakeClock('2026-11-01T03:00:00Z');
+      app = await createTestApp({ DEMO_MODE: 'true' }, (b) =>
+        b.overrideProvider(LOGIN_LIMIT_CLOCK).useValue(limitClock),
+      );
+    });
+
+    // RULES §7-1: тело и Retry-After не выдают, существует ли логин
+    it('при одновременной блокировке ответы известному и несуществующему логину совпадают целиком', async () => {
+      await fail('ok', LIMIT);
+      await fail('нет-такого', LIMIT);
+      const known = await post('ok');
+      const unknown = await post('нет-такого');
+      expectLocked(known);
+      expect(unknown.status).toBe(known.status);
+      expect(unknown.body).toEqual(known.body);
+      expect(unknown.headers['retry-after']).toBe(String(LOCK_SECONDS));
+      expect(known.headers['retry-after']).toBe(String(LOCK_SECONDS));
+    });
+
+    // RULES §7-1, §9-1: через 15 минут системного времени вход снова открыт
+    it('через 15 минут по часам лимита вход открыт', async () => {
+      await fail('ok', LIMIT);
+      limitClock.advanceMs(LOCK_SECONDS * 1000 - 1000);
+      const res = await post('ok');
+      expect(res.status).toBe(429);
+      expect(res.headers['retry-after']).toBe('1');
+      expect(res.body.details).toEqual({ retryAfterSeconds: 1 });
+      expect(res.body.message).toContain('Повторите через 1 мин.');
+      limitClock.advanceMs(1000);
+      expect((await post('ok')).status).toBe(200);
+    });
   });
 
   // RULES §9-1, §9-3: окно по системным часам; перевод демо-часов блокировку не снимает

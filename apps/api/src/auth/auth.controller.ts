@@ -1,6 +1,8 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthService, LoginResult } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { LoginLockedError } from './login-attempts';
 import { Public } from './public.decorator';
 
 @Controller('auth')
@@ -10,7 +12,18 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(200)
-  login(@Body() dto: LoginDto): Promise<LoginResult> {
-    return this.auth.login(dto.login, dto.password);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LoginResult> {
+    try {
+      return await this.auth.login(dto.login, dto.password);
+    } catch (e) {
+      // ProblemFilter заголовков не ставит; ответ он пишет в тот же res (RULES §7-1)
+      if (e instanceof LoginLockedError) {
+        res.setHeader('Retry-After', String(e.retryAfterSeconds));
+      }
+      throw e;
+    }
   }
 }
