@@ -107,6 +107,24 @@ test.describe('S3-d: каркас, вход и защита страниц', () 
     await expect(page.getByText('Сессия истекла')).toHaveCount(0);
   });
 
+  // RULES §7-1: после 5 неудач вход по логину закрыт на 15 минут. Логин несуществующий, чтобы не закрыть
+  // вход демо-пользователям; блокировка могла остаться от прошлого прогона (счётчик в памяти api), поэтому
+  // попытки повторяются, пока не придёт 429, но не больше 6.
+  test('много неудачных входов: сообщение о блокировке на экране входа', async ({ page }) => {
+    await page.goto('/login');
+    let status = 0;
+    for (let i = 0; i < 6 && status !== 429; i++) {
+      const [res] = await Promise.all([
+        page.waitForResponse((r) => r.url().endsWith('/api/auth/login')),
+        signIn(page, 'no-such-user', 'wrong-password'),
+      ]);
+      status = res.status();
+    }
+    expect(status).toBe(429);
+    await expect(page.getByRole('alert')).toContainText('Слишком много неудачных попыток входа. Повторите через');
+    await expect(page.getByRole('alert')).toContainText('AUTH_TOO_MANY_ATTEMPTS');
+  });
+
   // RULES §7-1
   test('истёкший токен: «Сессия истекла, войдите снова» и возврат на прежнюю страницу', async ({ page }) => {
     await loginAs(page, 'daniel');
