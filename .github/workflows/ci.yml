@@ -109,6 +109,16 @@ jobs:
       - run: npm run test:scripts
       - run: npm run trace-rules
 
+  # Уязвимости high и выше во всех зависимостях, по package-lock.json без npm ci (DECISIONS 2026-11-01 16:41).
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm audit --audit-level=high
+
   e2e:
     runs-on: ubuntu-latest
     steps:
