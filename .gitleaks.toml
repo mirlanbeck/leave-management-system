@@ -14,7 +14,8 @@ secretGroup = 1
 keywords = ["secret", "password", "passwd", "token", "key"]
 
 # Только для этого правила и только точным совпадением: демо-значения из docker-compose.yml и .env.example
-# (JWT_SECRET помечен «ТОЛЬКО ДЛЯ ДЕМО», Postgres — «демо-значения»).
+# (JWT_SECRET помечен «ТОЛЬКО ДЛЯ ДЕМО», Postgres — «демо-значения»), а также заглушки «…» и «<…>»
+# из обсуждения правила в стенограммах сессий docs/sessions (S10-b, #112).
 [[rules.allowlists]]
 regexTarget = "secret"
-regexes = ['''^demo-only-not-for-production$''', '''^leave$''']
+regexes = ['''^demo-only-not-for-production$''', '''^leave$''', '''^…$''', '''^<[^<>]+>$''']
